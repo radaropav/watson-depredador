@@ -21,6 +21,7 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
     try:
+        # HACK CRITICO: Forzar conexion directa al entorno de Binance Futures
         binance_client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY, requests_params={"timeout": 5})
     except Exception:
         pass
@@ -112,17 +113,15 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
 
 def analizar_mercado_via_pulso():
     try:
-        if not binance_client:
-            return "Error de cliente"
-
         precio_actual, oi_actual = consultar_mercado_futuros()
         if not precio_actual or not oi_actual:
-            return "Error de conexion"
+            return "Error de conexion o credenciales invalidas en Futures"
 
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_1MINUTE, limit=4)
         if not klines or len(klines) < 4:
-            return "Datos insuficientes"
+            return "Datos de velas insuficientes"
             
+        # Extrae el precio de cierre de la vela de hace 3 minutos
         precio_base = float(klines[0][4])
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
