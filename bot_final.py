@@ -24,8 +24,14 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         pass
 
 def enviar_telegram(mensaje):
-    url = "https://telegram.org" + TELEGRAM_TOKEN + "/sendMessage"
-    # TEXTO PLANO PURO: Eliminado el parse_mode para evitar rechazos de la API
+    # Corrección estricta de la dirección de red fragmentada
+    prefijo = "https://"
+    sub = "api."
+    raiz = "telegram"
+    tld = ".org"
+    ruta_metodo = "/bot" + TELEGRAM_TOKEN + "/sendMessage"
+    
+    url = prefijo + sub + raiz + tld + ruta_metodo
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     try:
         requests.post(url, json=payload, timeout=4)
@@ -132,10 +138,10 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health():
-    # TEXTO COMPLETAMENTE PLANO SIN CORTE DE FORMATOS REGIONALES
     enviar_telegram("RADAR WATSON CONECTADO EN LINEA RECEPTOR LISTO")
     return jsonify({"status": "online", "motor": "Watson Webhook Ready", "telegram": "notificado"}), 200
 
 if __name__ == '__main__':
-    port = int(os.getenv("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    cadena_puerto = os.environ.get("PORT", "10000")
+    puerto_numerico = int(cadena_puerto)
+    app.run(host='0.0.0.0', port=puerto_numerico)
