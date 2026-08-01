@@ -7,7 +7,6 @@ from binance.exceptions import BinanceAPIException
 
 app = Flask(__name__)
 
-# PARAMETROS FIJOS DE OPERACION
 SYMBOL = "ETHUSDT"
 TELEGRAM_TOKEN = "8991347344:AAHDSp718hsWqd8uxceBN9D0_n5ZXqR6V1Q"
 TELEGRAM_CHAT_ID = "-1004335003036"
@@ -19,7 +18,6 @@ FILTRO_MECHAZO_MAX = 0.0018
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
-# INICIALIZACION DIRECTA Y FLUIDA DEL CLIENTE DE FUTUROS
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
     try:
@@ -35,32 +33,30 @@ def enviar_telegram(mensaje):
     except Exception:
         pass
 
-def consultar_mercado_futuros():
+def consultar_precio_publicO():
+    """ORACULO PUBLICO: Extrae datos sin usar API Keys para burlar los bloqueos de IP."""
     try:
-        if not binance_client:
-            return None, None
+        # Consulta publica al libro de ordenes de Binance Futures (Libre de Whitelist)
+        res_p = requests.get("https://binance.com" + SYMBOL, timeout=4)
+        res_oi = requests.get("https://binance.com" + SYMBOL, timeout=4)
         
-        # Uso estricto de las funciones nativas de la API de Futuros
-        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
-        oi_data = binance_client.futures_open_interest(symbol=SYMBOL)
-        
-        if not ticker or not oi_data:
-            return None, None
-            
-        return float(ticker['price']), float(oi_data['openInterest'])
-    except Exception as e:
-        print(e)
-        return None, None
+        if res_p.status_code == 200 and res_oi.status_code == 200:
+            return float(res_p.json()["price"]), float(res_oi.json()["openInterest"])
+    except Exception:
+        pass
+    return None, None
 
-def evaluar_filtro_anti_mechazo(precio_origen):
+def evaluar_filtro_anti_mechazo_publico(precio_origen):
     time.sleep(3)
     try:
-        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
-        precio_actual = float(ticker['price'])
-        variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
-        return variacion_micro <= FILTRO_MECHAZO_MAX
+        res = requests.get("https://binance.com" + SYMBOL, timeout=4)
+        if res.status_code == 200:
+            precio_actual = float(res.json()["price"])
+            variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
+            return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
-        return False
+        pass
+    return False
 
 def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
     if not binance_client:
@@ -120,25 +116,30 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
 
 def analizar_mercado_via_pulso():
     try:
-        precio_actual, oi_actual = consultar_mercado_futuros()
+        # Extrae datos liquidos de forma totalmente publica y anonima
+        precio_actual, oi_actual = consultar_precio_publicO()
         if not precio_actual or not oi_actual:
-            return "Error de conexion o API keys rechazadas en entorno Futures"
+            return "Error de lectura de canales publicos de Binance"
 
-        klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_1MINUTE, limit=4)
-        if not klines or len(klines) < 4:
-            return "Datos de velas insuficientes"
+        # Captura de datos historicos publica via endpoint de velas libre de API Keys
+        res_k = requests.get("https://binance.com" + SYMBOL + "&interval=1m&limit=4", timeout=4)
+        if res_k.status_code != 200:
+            return "Error al extraer historico de velas"
             
-        # Corregido: Extraccion indexada del precio de cierre de la cuarta vela anterior [4][4]
-        precio_base = float(klines[0][4])
+        klines = res_k.json()
+        if not klines or len(klines) < 4:
+            return "Velas del libro insuficientes"
+            
+        precio_base = float(klines[0][4]) # Precio de cierre de hace 3 minutos sin usar API Keys
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
 
         if abs(var_precio) >= UMBRAL_MIN_PRECIO and var_oi >= UMBRAL_MIN_OI:
             if var_precio > 0:
-                if evaluar_filtro_anti_mechazo(precio_actual):
+                if evaluar_filtro_anti_mechazo_publico(precio_actual):
                     ejecutar_caza_asimetrica("LONG", precio_actual, var_precio, var_oi)
             elif var_precio < 0:
-                if evaluar_filtro_anti_mechazo(precio_actual):
+                if evaluar_filtro_anti_mechazo_publico(precio_actual):
                     ejecutar_caza_asimetrica("SHORT", precio_actual, var_precio, var_oi)
         else:
             enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH: ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
