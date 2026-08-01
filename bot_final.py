@@ -34,7 +34,7 @@ def enviar_telegram(mensaje):
         pass
 
 def consultar_oraculo_gateio():
-    """Extrae precio e interes abierto mapeando los indices de lista correctamente."""
+    """Extrae precio e interes abierto validando que la API responda objetos directos."""
     try:
         res_p = requests.get("https://gateio.ws", timeout=4)
         res_oi = requests.get("https://gateio.ws", timeout=4)
@@ -43,12 +43,15 @@ def consultar_oraculo_gateio():
             data_p = res_p.json()
             data_oi = res_oi.json()
             
-            # Correccion crucial: Extraer el primer elemento de la lista devuelta por Gate.io
-            precio = float(data_p[0]["last_price"])
-            oi = float(data_oi[0]["open_interest"])
+            # Si Gate.io devuelve una lista, extraemos el primer elemento; si es objeto, directo.
+            ticker_obj = data_p[0] if isinstance(data_p, list) else data_p
+            contract_obj = data_oi[0] if isinstance(data_oi, list) else data_oi
+            
+            precio = float(ticker_obj["last_price"])
+            oi = float(contract_obj["open_interest"])
             return precio, oi
-    except Exception as e:
-        print(e)
+    except Exception:
+        pass
     return None, None
 
 def evaluar_filtro_anti_mechazo_oraculo(precio_origen):
@@ -57,7 +60,8 @@ def evaluar_filtro_anti_mechazo_oraculo(precio_origen):
         res = requests.get("https://gateio.ws", timeout=4)
         if res.status_code == 200:
             data = res.json()
-            precio_actual = float(data[0]["last_price"])
+            ticker_obj = data[0] if isinstance(data, list) else data
+            precio_actual = float(ticker_obj["last_price"])
             variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
             return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
@@ -124,7 +128,7 @@ def analizar_mercado_via_pulso():
     try:
         precio_actual, oi_actual = consultar_oraculo_gateio()
         if not precio_actual or not oi_actual:
-            return "Error de procesamiento en la estructura JSON de Gate.io"
+            return "Error de lectura de canales alternativos de Gate.io"
 
         res_k = requests.get("https://gateio.ws", timeout=4)
         if res_k.status_code != 200:
@@ -134,8 +138,9 @@ def analizar_mercado_via_pulso():
         if not klines or len(klines) < 4:
             return "Velas del libro alternativas insuficientes"
             
-        # Corregido: En la lista de velas de Gate.io, cada vela es un objeto. El precio de cierre es la clave 'c'
-        precio_base = float(klines[0]["c"])
+        # Corregido estructuralmente: las velas son una lista de listas. 
+        # klines[0] es la vela de hace 3 minutos. El indice 2 es el precio de cierre (close price)
+        precio_base = float(klines[0][2])
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
 
