@@ -25,7 +25,8 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 
 def enviar_telegram(mensaje):
     url = "https://telegram.org" + TELEGRAM_TOKEN + "/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
+    # TEXTO PLANO PURO: Eliminado el parse_mode para evitar rechazos de la API
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     try:
         requests.post(url, json=payload, timeout=4)
     except Exception:
@@ -92,15 +93,15 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
             symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True, reduceOnly=True
         )
 
-        msg = f"🦅 *DEPREDADOR EJECUTADO* (x{leverage})\n💥 Accion: *{direccion}*\n💰 Precio Entrada: ${precio_mercado}\n🎯 TP Objetivo: ${precio_tp}\n🛑 SL Seguridad: ${precio_sl}"
+        msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " ACCION " + direccion + " ENTRADA " + str(precio_mercado) + " TP " + str(precio_tp) + " SL " + str(precio_sl)
         enviar_telegram(msg)
         return "Exito"
 
     except BinanceAPIException as e:
-        enviar_telegram(f"❌ *API Binance:* {e.message}")
+        enviar_telegram("ERROR BINANCE API " + str(e.message))
         return e.message
     except Exception as e:
-        enviar_telegram(f"❌ *Error:* {str(e)}")
+        enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
 
 @app.route('/webhook', methods=['POST'])
@@ -119,7 +120,7 @@ def webhook():
         return jsonify({"status": "error", "reason": "No se pudo obtener precio base de Binance"}), 500
 
     if not evaluar_filtro_anti_mechazo_directo(precio_actual):
-        enviar_telegram(f"⚠️ *Disparo Cancelado:* Mechazo o Inestabilidad detectada en {SYMBOL}.")
+        enviar_telegram("DISPARO CANCELADO MECHAZO DETECTADO EN ETH")
         return jsonify({"status": "cancelado", "reason": "Filtro anti-mechazos activado"}), 200
 
     resultado = ejecutar_caza_asimetrica(direccion, precio_actual, fuerza)
@@ -131,8 +132,8 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health():
-    # AUDITORIA OBLIGATORIA: Forza el disparo de Telegram en cada pulso de red
-    enviar_telegram("🦅 *Radar Watson Conectado*\n\nEstado: Receptor Webhook En Linea\nEstructura: Nivel 2 Calibrado")
+    # TEXTO COMPLETAMENTE PLANO SIN CORTE DE FORMATOS REGIONALES
+    enviar_telegram("RADAR WATSON CONECTADO EN LINEA RECEPTOR LISTO")
     return jsonify({"status": "online", "motor": "Watson Webhook Ready", "telegram": "notificado"}), 200
 
 if __name__ == '__main__':
