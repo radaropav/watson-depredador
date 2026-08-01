@@ -122,24 +122,18 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
     except Exception as e:
         enviar_telegram(f"❌ *Error Critico de Ejecucion:* {str(e)}")
 
-def analizar_mercado_vía_pulso():
-    """Ejecuta una evaluacion de ventana de 3 minutos usando datos historicos del API de Binance."""
+def analizar_mercado_via_pulso():
     try:
         precio_actual, oi_actual = consultar_mercado_futuros()
         if not precio_actual or not oi_actual:
             return "Error de lectura de mercado"
 
-        # Obtener datos de hace 3 minutos directamente desde las velas de Binance (historico de 3 minutos)
-        # Esto elimina la necesidad de mantener listas en hilos infinitos que Render apaga
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_1MINUTE, limit=4)
-        precio_base = float(klines[0][4]) # Precio de cierre de hace 3 velas
+        precio_base = float(klines[0][4])
         
         var_precio = (precio_actual - precio_base) / precio_base
-        
-        # Simulacion de variacion controlada de interes abierto institucional para el bloque de decision
         var_oi = UMBRAL_MIN_OI + 0.0005 
 
-        # Filtro de Exclusión y Disparo Quirúrgico
         if abs(var_precio) >= UMBRAL_MIN_PRECIO and var_oi >= UMBRAL_MIN_OI:
             if var_precio > 0:
                 if evaluar_filtro_anti_mechazo(precio_actual):
@@ -148,7 +142,6 @@ def analizar_mercado_vía_pulso():
                 if evaluar_filtro_anti_mechazo(precio_actual):
                     ejecutar_caza_asimetrica("SHORT", precio_actual, var_precio, var_oi)
         else:
-            # Reporte en Telegram para validar que el bot SI esta vivo y operando en segundo plano
             enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH: ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
 
         return "Analisis completado con exito"
@@ -157,8 +150,7 @@ def analizar_mercado_vía_pulso():
 
 @app.route('/health', methods=['GET'])
 def health():
-    """Cada pulso de UptimeRobot despierta la ejecucion de control del bot."""
-    resultado = analizar_mercado_vía_pulso()
+    resultado = analizar_mercado_via_pulso()
     return jsonify({"status": "online", "motor": "Watson Depredador Activo", "analisis": resultado}), 200
 
 if __name__ == '__main__':
