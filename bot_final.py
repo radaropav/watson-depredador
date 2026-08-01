@@ -34,7 +34,6 @@ def enviar_telegram(mensaje):
         pass
 
 def consultar_oraculo_gateio():
-    """Extrae precio e interes abierto validando que la API responda objetos directos."""
     try:
         res_p = requests.get("https://gateio.ws", timeout=4)
         res_oi = requests.get("https://gateio.ws", timeout=4)
@@ -43,12 +42,12 @@ def consultar_oraculo_gateio():
             data_p = res_p.json()
             data_oi = res_oi.json()
             
-            # Si Gate.io devuelve una lista, extraemos el primer elemento; si es objeto, directo.
-            ticker_obj = data_p[0] if isinstance(data_p, list) else data_p
-            contract_obj = data_oi[0] if isinstance(data_oi, list) else data_oi
+            # Validacion defensiva estricta de formato de Gate.io
+            obj_p = data_p[0] if isinstance(data_p, list) else data_p
+            obj_oi = data_oi[0] if isinstance(data_oi, list) else data_oi
             
-            precio = float(ticker_obj["last_price"])
-            oi = float(contract_obj["open_interest"])
+            precio = float(obj_p["last_price"])
+            oi = float(obj_oi["open_interest"])
             return precio, oi
     except Exception:
         pass
@@ -60,8 +59,8 @@ def evaluar_filtro_anti_mechazo_oraculo(precio_origen):
         res = requests.get("https://gateio.ws", timeout=4)
         if res.status_code == 200:
             data = res.json()
-            ticker_obj = data[0] if isinstance(data, list) else data
-            precio_actual = float(ticker_obj["last_price"])
+            obj_p = data[0] if isinstance(data, list) else data
+            precio_actual = float(obj_p["last_price"])
             variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
             return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
@@ -138,9 +137,14 @@ def analizar_mercado_via_pulso():
         if not klines or len(klines) < 4:
             return "Velas del libro alternativas insuficientes"
             
-        # Corregido estructuralmente: las velas son una lista de listas. 
-        # klines[0] es la vela de hace 3 minutos. El indice 2 es el precio de cierre (close price)
-        precio_base = float(klines[0][2])
+        # Analisis seguro de array: cada vela es una lista. Indice 1 de la lista interna es el precio de cierre (close)
+        # Tomamos la vela de hace 3 minutos (indice 0 de la respuesta filtrada)
+        vela_objetivo = klines[0]
+        precio_base = float(vela_objetivo.get("c", vela_objetivo[1] if isinstance(vela_objetivo, list) else 0))
+        
+        if precio_base == 0:
+            return "Error de parseo de datos en klines"
+
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
 
