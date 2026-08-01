@@ -7,6 +7,7 @@ from binance.exceptions import BinanceAPIException
 
 app = Flask(__name__)
 
+# PARAMETROS FIJOS DE OPERACION
 SYMBOL = "ETHUSDT"
 TELEGRAM_TOKEN = "8991347344:AAHDSp718hsWqd8uxceBN9D0_n5ZXqR6V1Q"
 TELEGRAM_CHAT_ID = "-1004335003036"
@@ -18,17 +19,11 @@ FILTRO_MECHAZO_MAX = 0.0018
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
+# INICIALIZACION DIRECTA Y FLUIDA DEL CLIENTE DE FUTUROS
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
     try:
-        # CONEXION BLINDADA ANTI-GEOBLOQUEO MEDIANTE LA RED GLOBAL DE BINANCE
-        binance_client = Client(
-            BINANCE_API_KEY, 
-            BINANCE_SECRET_KEY, 
-            requests_params={"timeout": 6}
-        )
-        # Reconfiguracion dinamica de ruta hacia el servidor espejo oficial libre de restricciones
-        binance_client.API_URL = "https://binance.com"
+        binance_client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
     except Exception:
         pass
 
@@ -44,8 +39,14 @@ def consultar_mercado_futuros():
     try:
         if not binance_client:
             return None, None
+        
+        # Uso estricto de las funciones nativas de la API de Futuros
         ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
         oi_data = binance_client.futures_open_interest(symbol=SYMBOL)
+        
+        if not ticker or not oi_data:
+            return None, None
+            
         return float(ticker['price']), float(oi_data['openInterest'])
     except Exception as e:
         print(e)
@@ -121,12 +122,13 @@ def analizar_mercado_via_pulso():
     try:
         precio_actual, oi_actual = consultar_mercado_futuros()
         if not precio_actual or not oi_actual:
-            return "Rechazo de conexion por Whitelist IP en Binance Api"
+            return "Error de conexion o API keys rechazadas en entorno Futures"
 
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_1MINUTE, limit=4)
         if not klines or len(klines) < 4:
             return "Datos de velas insuficientes"
             
+        # Corregido: Extraccion indexada del precio de cierre de la cuarta vela anterior [4][4]
         precio_base = float(klines[0][4])
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
