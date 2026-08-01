@@ -33,22 +33,24 @@ def enviar_telegram(mensaje):
     except Exception:
         pass
 
-def consultar_oraculo_gateio():
+def consultar_oraculo_kucoin():
+    """Bypass de Ultra-Seguridad: Obtiene datos en vivo desde KuCoin Futures."""
     try:
-        res_p = requests.get("https://gateio.ws", timeout=4)
-        res_oi = requests.get("https://gateio.ws", timeout=4)
+        # Endpoints publicos de KuCoin Futures libres de restricciones de IP
+        url_ticker = "https://kucoin.com"
+        url_oi = "https://kucoin.com"
+        
+        res_p = requests.get(url_ticker, timeout=4)
+        res_oi = requests.get(url_oi, timeout=4)
         
         if res_p.status_code == 200 and res_oi.status_code == 200:
             data_p = res_p.json()
             data_oi = res_oi.json()
             
-            # Validacion defensiva estricta de formato de Gate.io
-            obj_p = data_p[0] if isinstance(data_p, list) else data_p
-            obj_oi = data_oi[0] if isinstance(data_oi, list) else data_oi
-            
-            precio = float(obj_p["last_price"])
-            oi = float(obj_oi["open_interest"])
-            return precio, oi
+            if data_p.get("code") == "200000" and data_oi.get("code") == "200000":
+                precio = float(data_p["data"]["price"])
+                oi = float(data_oi["data"]["openInterest"])
+                return precio, oi
     except Exception:
         pass
     return None, None
@@ -56,13 +58,13 @@ def consultar_oraculo_gateio():
 def evaluar_filtro_anti_mechazo_oraculo(precio_origen):
     time.sleep(3)
     try:
-        res = requests.get("https://gateio.ws", timeout=4)
+        res = requests.get("https://kucoin.com", timeout=4)
         if res.status_code == 200:
             data = res.json()
-            obj_p = data[0] if isinstance(data, list) else data
-            precio_actual = float(obj_p["last_price"])
-            variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
-            return variacion_micro <= FILTRO_MECHAZO_MAX
+            if data.get("code") == "200000":
+                precio_actual = float(data["data"]["price"])
+                variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
+                return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
         pass
     return False
@@ -125,26 +127,28 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
 
 def analizar_mercado_via_pulso():
     try:
-        precio_actual, oi_actual = consultar_oraculo_gateio()
+        precio_actual, oi_actual = consultar_oraculo_kucoin()
         if not precio_actual or not oi_actual:
-            return "Error de lectura de canales alternativos de Gate.io"
+            return "Error de lectura en canales de datos KuCoin"
 
-        res_k = requests.get("https://gateio.ws", timeout=4)
-        if res_k.status_code != 200:
-            return "Error al extraer historico de velas de Gate.io"
-            
-        klines = res_k.json()
-        if not klines or len(klines) < 4:
-            return "Velas del libro alternativas insuficientes"
-            
-        # Analisis seguro de array: cada vela es una lista. Indice 1 de la lista interna es el precio de cierre (close)
-        # Tomamos la vela de hace 3 minutos (indice 0 de la respuesta filtrada)
-        vela_objetivo = klines[0]
-        precio_base = float(vela_objetivo.get("c", vela_objetivo[1] if isinstance(vela_objetivo, list) else 0))
+        # Obtener klines historicos desde KuCoin de los ultimos 3 minutos
+        # Parametros de consulta planos sin URLs complejas
+        ahora = int(time.time() * 1000)
+        hace_3m = ahora - 240000
+        url_k = f"https://kucoin.com{hace_3m}&to={ahora}"
         
-        if precio_base == 0:
-            return "Error de parseo de datos en klines"
-
+        res_k = requests.get(url_k, timeout=4)
+        if res_k.status_code != 200:
+            return "Error al extraer historico de velas"
+            
+        data_k = res_k.json()
+        klines = data_k.get("data", [])
+        
+        if not klines or len(klines) < 3:
+            return "Velas del libro insuficientes"
+            
+        # En KuCoin, la respuesta es una lista de listas. El elemento 4 es el precio de cierre.
+        precio_base = float(klines[0][4])
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
 
@@ -156,7 +160,7 @@ def analizar_mercado_via_pulso():
                 if evaluar_filtro_anti_mechazo_oraculo(precio_actual):
                     ejecutar_caza_asimetrica("SHORT", precio_actual, var_precio, var_oi)
         else:
-            enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH (GateIO): ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
+            enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH (KuCoin): ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
 
         return "Exito"
     except Exception as e:
