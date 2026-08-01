@@ -7,12 +7,10 @@ from binance.exceptions import BinanceAPIException
 
 app = Flask(__name__)
 
-# CONFIGURACION DE PARAMETROS FIJOS DEL SISTEMA
 SYMBOL = "ETHUSDT"
 TELEGRAM_TOKEN = "8991347344:AAHDSp718hsWqd8uxceBN9D0_n5ZXqR6V1Q"
 TELEGRAM_CHAT_ID = "-1004335003036"
 
-# UMBRALES DE PRECISION QUANT BANCARIA
 UMBRAL_MIN_PRECIO = 0.0012   
 UMBRAL_MIN_OI = 0.0025       
 FILTRO_MECHAZO_MAX = 0.0018  
@@ -20,25 +18,15 @@ FILTRO_MECHAZO_MAX = 0.0018
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
-ENDPOINTS_BINANCE = [
-    "https://binance.com",
-    "https://binance.com",
-    "https://binance.com",
-    "https://binance.com"
-]
-
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
-    for url_base in ENDPOINTS_BINANCE:
-        try:
-            binance_client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY, requests_params={"timeout": 5})
-            binance_client.API_URL = url_base
-            break
-        except Exception:
-            continue
+    try:
+        binance_client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY, requests_params={"timeout": 5})
+    except Exception:
+        pass
 
 def enviar_telegram(mensaje):
-    url = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage"
+    url = "https://telegram.org" + TELEGRAM_TOKEN + "/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
     try:
         requests.post(url, json=payload, timeout=4)
@@ -53,7 +41,7 @@ def consultar_mercado_futuros():
         oi_data = binance_client.futures_open_interest(symbol=SYMBOL)
         return float(ticker['price']), float(oi_data['openInterest'])
     except Exception as e:
-        print(f"Error de lectura en API de Binance: {e}")
+        print(e)
         return None, None
 
 def evaluar_filtro_anti_mechazo(precio_origen):
@@ -118,27 +106,24 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
         enviar_telegram(msg)
 
     except BinanceAPIException as e:
-        enviar_telegram(f"❌ *API Binance Rechazo:* {e.message} (Codigo {e.code})")
+        enviar_telegram(f"❌ *API Binance:* {e.message}")
     except Exception as e:
-        enviar_telegram(f"❌ *Error Critico de Ejecucion:* {str(e)}")
+        enviar_telegram(f"❌ *Error:* {str(e)}")
 
 def analizar_mercado_via_pulso():
     try:
         if not binance_client:
-            return "Cliente API no inicializado"
+            return "Error de cliente"
 
         precio_actual, oi_actual = consultar_mercado_futuros()
         if not precio_actual or not oi_actual:
-            return "Error de lectura de mercado en vivo"
+            return "Error de conexion"
 
-        # Captura de datos historicos corregida para extraer el indice exacto de cierre [4]
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_1MINUTE, limit=4)
         if not klines or len(klines) < 4:
-            return "Datos de velas insuficientes"
+            return "Datos insuficientes"
             
-        # klines[0] es la vela de hace 3 minutos. El indice [4] es el precio de cierre (close price)
         precio_base = float(klines[0][4])
-        
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
 
@@ -152,14 +137,18 @@ def analizar_mercado_via_pulso():
         else:
             enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH: ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
 
-        return "Analisis completado con exito"
+        return "Exito"
     except Exception as e:
-        return f"Error en ejecucion interna: {str(e)}"
+        return str(e)
+
+@app.route('/', methods=['GET', 'HEAD'])
+def index():
+    return jsonify({"status": "live", "service": "active"}), 200
 
 @app.route('/health', methods=['GET'])
 def health():
     resultado = analizar_mercado_via_pulso()
-    return jsonify({"status": "online", "motor": "Watson Depredador Activo", "analisis": resultado}), 200
+    return jsonify({"status": "online", "analisis": resultado}), 200
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 10000))
