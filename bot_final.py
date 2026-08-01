@@ -1,7 +1,7 @@
 import os
 import time
 import requests
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
@@ -11,8 +11,6 @@ SYMBOL = "ETHUSDT"
 TELEGRAM_TOKEN = "8991347344:AAHDSp718hsWqd8uxceBN9D0_n5ZXqR6V1Q"
 TELEGRAM_CHAT_ID = "-1004335003036"
 
-UMBRAL_MIN_PRECIO = 0.0012   
-UMBRAL_MIN_OI = 0.0025       
 FILTRO_MECHAZO_MAX = 0.0018  
 
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
@@ -33,48 +31,27 @@ def enviar_telegram(mensaje):
     except Exception:
         pass
 
-def consultar_oraculo_kucoin():
-    """Bypass de Ultra-Seguridad: Obtiene datos en vivo desde KuCoin Futures."""
-    try:
-        # Endpoints publicos de KuCoin Futures libres de restricciones de IP
-        url_ticker = "https://kucoin.com"
-        url_oi = "https://kucoin.com"
-        
-        res_p = requests.get(url_ticker, timeout=4)
-        res_oi = requests.get(url_oi, timeout=4)
-        
-        if res_p.status_code == 200 and res_oi.status_code == 200:
-            data_p = res_p.json()
-            data_oi = res_oi.json()
-            
-            if data_p.get("code") == "200000" and data_oi.get("code") == "200000":
-                precio = float(data_p["data"]["price"])
-                oi = float(data_oi["data"]["openInterest"])
-                return precio, oi
-    except Exception:
-        pass
-    return None, None
-
-def evaluar_filtro_anti_mechazo_oraculo(precio_origen):
+def evaluar_filtro_anti_mechazo_directo(precio_origen):
+    """Filtro anti-mechazos de 3s usando el cliente de Binance inyectado."""
     time.sleep(3)
     try:
-        res = requests.get("https://kucoin.com", timeout=4)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get("code") == "200000":
-                precio_actual = float(data["data"]["price"])
-                variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
-                return variacion_micro <= FILTRO_MECHAZO_MAX
+        if not binance_client:
+            return False
+        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
+        precio_actual = float(ticker['price'])
+        variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
+        return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
         pass
     return False
 
-def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
+def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     if not binance_client:
-        return
+        return "Cliente Binance no inicializado"
 
     try:
-        if abs(var_oi) >= 0.0050 or abs(var_precio) >= 0.0035:
+        # Apalancamiento dinamico segun la fuerza de la señal enviada
+        if fuerza_senal >= 0.0040:
             leverage = 20
             tp_porcentaje = 0.0050  
             sl_porcentaje = 0.0030  
@@ -88,21 +65,24 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
         account = binance_client.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
         
+        # Interes compuesto con guardrail a $400 USD
         capital_operativo = balance_disponible * 0.50 if balance_disponible > 400.0 else balance_disponible * 1.00
         
         cantidad_nocional = (capital_operativo * leverage) / precio_mercado
         quantity = round(cantidad_nocional, 3)
         
         if quantity <= 0:
-            return
+            return "Capital insuficiente para el lote"
 
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
 
+        # Orden Principal MARKET
         binance_client.futures_create_order(
             symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity
         )
 
+        # Calculo de Brackets
         if direccion == "LONG":
             precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
             precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
@@ -110,6 +90,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
             precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
             precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
 
+        # Salidas Reduce Only
         binance_client.futures_create_order(
             symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True, reduceOnly=True
         )
@@ -117,63 +98,48 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
             symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True, reduceOnly=True
         )
 
-        msg = f"🦅 *DEPREDADOR EJECUTADO* (x{leverage})\n💥 Accion: *{direccion}*\n💰 Precio Entrada: ${precio_mercado}\n🎯 TP Objetivo: ${precio_tp}\n🛑 SL Seguridad: ${precio_sl}\n📊 Var. Precio (3m): {round(var_precio*100, 3)}%\n📈 Var. OI (3m): {round(var_oi*100, 3)}%"
+        msg = f"🦅 *DEPREDADOR EJECUTADO* (x{leverage})\n💥 Accion: *{direccion}*\n💰 Precio Entrada: ${precio_mercado}\n🎯 TP Objetivo: ${precio_tp}\n🛑 SL Seguridad: ${precio_sl}"
         enviar_telegram(msg)
+        return "Exito"
 
     except BinanceAPIException as e:
         enviar_telegram(f"❌ *API Binance:* {e.message}")
+        return e.message
     except Exception as e:
         enviar_telegram(f"❌ *Error:* {str(e)}")
-
-def analizar_mercado_via_pulso():
-    try:
-        precio_actual, oi_actual = consultar_oraculo_kucoin()
-        if not precio_actual or not oi_actual:
-            return "Error de lectura en canales de datos KuCoin"
-
-        # Obtener klines historicos desde KuCoin de los ultimos 3 minutos
-        # Parametros de consulta planos sin URLs complejas
-        ahora = int(time.time() * 1000)
-        hace_3m = ahora - 240000
-        url_k = f"https://kucoin.com{hace_3m}&to={ahora}"
-        
-        res_k = requests.get(url_k, timeout=4)
-        if res_k.status_code != 200:
-            return "Error al extraer historico de velas"
-            
-        data_k = res_k.json()
-        klines = data_k.get("data", [])
-        
-        if not klines or len(klines) < 3:
-            return "Velas del libro insuficientes"
-            
-        # En KuCoin, la respuesta es una lista de listas. El elemento 4 es el precio de cierre.
-        precio_base = float(klines[0][4])
-        var_precio = (precio_actual - precio_base) / precio_base
-        var_oi = UMBRAL_MIN_OI + 0.0005 
-
-        if abs(var_precio) >= UMBRAL_MIN_PRECIO and var_oi >= UMBRAL_MIN_OI:
-            if var_precio > 0:
-                if evaluar_filtro_anti_mechazo_oraculo(precio_actual):
-                    ejecutar_caza_asimetrica("LONG", precio_actual, var_precio, var_oi)
-            elif var_precio < 0:
-                if evaluar_filtro_anti_mechazo_oraculo(precio_actual):
-                    ejecutar_caza_asimetrica("SHORT", precio_actual, var_precio, var_oi)
-        else:
-            enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH (KuCoin): ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
-
-        return "Exito"
-    except Exception as e:
         return str(e)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    """Recibe alertas JSON externas para ejecucion automatica instantanea."""
+    data = request.get_json() or {}
+    direccion = data.get("direccion")  # "LONG" o "SHORT"
+    fuerza = float(data.get("variacion", 0.0))  # Fuerza del movimiento (ej: 0.0035)
+
+    if direccion not in ["LONG", "SHORT"]:
+        return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
+
+    try:
+        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
+        precio_actual = float(ticker['price'])
+    except Exception:
+        return jsonify({"status": "error", "reason": "No se pudo obtener precio base de Binance"}), 500
+
+    # Filtro de seguridad anti-mechazos integrado
+    if not evaluar_filtro_anti_mechazo_directo(precio_actual):
+        enviar_telegram(f"⚠️ *Disparo Cancelado:* Mechazo o Inestabilidad detectada en {SYMBOL}.")
+        return jsonify({"status": "cancelado", "reason": "Filtro anti-mechazos activado"}), 200
+
+    resultado = ejecutar_caza_asimetrica(direccion, precio_actual, fuerza)
+    return jsonify({"status": "procesado", "resultado": resultado}), 200
 
 @app.route('/', methods=['GET', 'HEAD'])
 def index():
-    return jsonify({"status": "live", "service": "active"}), 200
+    return jsonify({"status": "live", "service": "webhook_active"}), 200
 
 @app.route('/health', methods=['GET'])
 def health():
-    resultado = analizar_mercado_via_pulso()
-    return jsonify({"status": "online", "analisis": resultado}), 200
+    return jsonify({"status": "online", "motor": "Watson Webhook Ready"}), 200
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 10000))
