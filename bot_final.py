@@ -124,11 +124,19 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
 
 def analizar_mercado_via_pulso():
     try:
+        if not binance_client:
+            return "Cliente API no inicializado"
+
         precio_actual, oi_actual = consultar_mercado_futuros()
         if not precio_actual or not oi_actual:
-            return "Error de lectura de mercado"
+            return "Error de lectura de mercado en vivo"
 
+        # Captura de datos historicos corregida para extraer el indice exacto de cierre [4]
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_1MINUTE, limit=4)
+        if not klines or len(klines) < 4:
+            return "Datos de velas insuficientes"
+            
+        # klines[0] es la vela de hace 3 minutos. El indice [4] es el precio de cierre (close price)
         precio_base = float(klines[0][4])
         
         var_precio = (precio_actual - precio_base) / precio_base
@@ -146,7 +154,7 @@ def analizar_mercado_via_pulso():
 
         return "Analisis completado con exito"
     except Exception as e:
-        return f"Error analitico: {str(e)}"
+        return f"Error en ejecucion interna: {str(e)}"
 
 @app.route('/health', methods=['GET'])
 def health():
