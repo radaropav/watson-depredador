@@ -33,25 +33,26 @@ def enviar_telegram(mensaje):
     except Exception:
         pass
 
-def consultar_precio_publicO():
-    """ORACULO PUBLICO: Extrae datos sin usar API Keys para burlar los bloqueos de IP."""
+def consultar_oraculo_gateio():
+    """Extrae precio e interes abierto desde Gate.io libre de geobloqueos."""
     try:
-        # Consulta publica al libro de ordenes de Binance Futures (Libre de Whitelist)
-        res_p = requests.get("https://binance.com" + SYMBOL, timeout=4)
-        res_oi = requests.get("https://binance.com" + SYMBOL, timeout=4)
+        res_p = requests.get("https://gateio.ws", timeout=4)
+        res_oi = requests.get("https://gateio.ws", timeout=4)
         
         if res_p.status_code == 200 and res_oi.status_code == 200:
-            return float(res_p.json()["price"]), float(res_oi.json()["openInterest"])
+            precio = float(res_p.json()[0]["last_price"])
+            oi = float(res_oi.json()["open_interest"])
+            return precio, oi
     except Exception:
         pass
     return None, None
 
-def evaluar_filtro_anti_mechazo_publico(precio_origen):
+def evaluar_filtro_anti_mechazo_oraculo(precio_origen):
     time.sleep(3)
     try:
-        res = requests.get("https://binance.com" + SYMBOL, timeout=4)
+        res = requests.get("https://gateio.ws", timeout=4)
         if res.status_code == 200:
-            precio_actual = float(res.json()["price"])
+            precio_actual = float(res.json()[0]["last_price"])
             variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
             return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
@@ -116,33 +117,31 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, var_precio, var_oi):
 
 def analizar_mercado_via_pulso():
     try:
-        # Extrae datos liquidos de forma totalmente publica y anonima
-        precio_actual, oi_actual = consultar_precio_publicO()
+        precio_actual, oi_actual = consultar_oraculo_gateio()
         if not precio_actual or not oi_actual:
-            return "Error de lectura de canales publicos de Binance"
+            return "Error de lectura de canales alternativos de Gate.io"
 
-        # Captura de datos historicos publica via endpoint de velas libre de API Keys
-        res_k = requests.get("https://binance.com" + SYMBOL + "&interval=1m&limit=4", timeout=4)
+        res_k = requests.get("https://gateio.ws", timeout=4)
         if res_k.status_code != 200:
-            return "Error al extraer historico de velas"
+            return "Error al extraer historico de velas de Gate.io"
             
         klines = res_k.json()
         if not klines or len(klines) < 4:
-            return "Velas del libro insuficientes"
+            return "Velas del libro alternativas insuficientes"
             
-        precio_base = float(klines[0][4]) # Precio de cierre de hace 3 minutos sin usar API Keys
+        precio_base = float(klines[0]["c"])
         var_precio = (precio_actual - precio_base) / precio_base
         var_oi = UMBRAL_MIN_OI + 0.0005 
 
         if abs(var_precio) >= UMBRAL_MIN_PRECIO and var_oi >= UMBRAL_MIN_OI:
             if var_precio > 0:
-                if evaluar_filtro_anti_mechazo_publico(precio_actual):
+                if evaluar_filtro_anti_mechazo_oraculo(precio_actual):
                     ejecutar_caza_asimetrica("LONG", precio_actual, var_precio, var_oi)
             elif var_precio < 0:
-                if evaluar_filtro_anti_mechazo_publico(precio_actual):
+                if evaluar_filtro_anti_mechazo_oraculo(precio_actual):
                     ejecutar_caza_asimetrica("SHORT", precio_actual, var_precio, var_oi)
         else:
-            enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH: ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
+            enviar_telegram(f"📊 *Radar Watson Operando*\n\nPrecio ETH (GateIO): ${precio_actual}\nVar. Precio (3m): {round(var_precio*100, 3)}%\nEstado: Mercado Plano / Buscando Asimetria")
 
         return "Exito"
     except Exception as e:
