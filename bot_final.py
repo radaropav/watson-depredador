@@ -32,7 +32,6 @@ def enviar_telegram(mensaje):
         pass
 
 def evaluar_filtro_anti_mechazo_directo(precio_origen):
-    """Filtro anti-mechazos de 3s usando el cliente de Binance inyectado."""
     time.sleep(3)
     try:
         if not binance_client:
@@ -50,7 +49,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         return "Cliente Binance no inicializado"
 
     try:
-        # Apalancamiento dinamico segun la fuerza de la señal enviada
         if fuerza_senal >= 0.0040:
             leverage = 20
             tp_porcentaje = 0.0050  
@@ -65,7 +63,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         account = binance_client.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
         
-        # Interes compuesto con guardrail a $400 USD
         capital_operativo = balance_disponible * 0.50 if balance_disponible > 400.0 else balance_disponible * 1.00
         
         cantidad_nocional = (capital_operativo * leverage) / precio_mercado
@@ -77,12 +74,10 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
 
-        # Orden Principal MARKET
         binance_client.futures_create_order(
             symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity
         )
 
-        # Calculo de Brackets
         if direccion == "LONG":
             precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
             precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
@@ -90,7 +85,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
             precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
             precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
 
-        # Salidas Reduce Only
         binance_client.futures_create_order(
             symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True, reduceOnly=True
         )
@@ -111,10 +105,9 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """Recibe alertas JSON externas para ejecucion automatica instantanea."""
     data = request.get_json() or {}
-    direccion = data.get("direccion")  # "LONG" o "SHORT"
-    fuerza = float(data.get("variacion", 0.0))  # Fuerza del movimiento (ej: 0.0035)
+    direccion = data.get("direccion")  
+    fuerza = float(data.get("variacion", 0.0))  
 
     if direccion not in ["LONG", "SHORT"]:
         return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
@@ -125,7 +118,6 @@ def webhook():
     except Exception:
         return jsonify({"status": "error", "reason": "No se pudo obtener precio base de Binance"}), 500
 
-    # Filtro de seguridad anti-mechazos integrado
     if not evaluar_filtro_anti_mechazo_directo(precio_actual):
         enviar_telegram(f"⚠️ *Disparo Cancelado:* Mechazo o Inestabilidad detectada en {SYMBOL}.")
         return jsonify({"status": "cancelado", "reason": "Filtro anti-mechazos activado"}), 200
@@ -139,7 +131,9 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({"status": "online", "motor": "Watson Webhook Ready"}), 200
+    # AUDITORIA OBLIGATORIA: Forza el disparo de Telegram en cada pulso de red
+    enviar_telegram("🦅 *Radar Watson Conectado*\n\nEstado: Receptor Webhook En Linea\nEstructura: Nivel 2 Calibrado")
+    return jsonify({"status": "online", "motor": "Watson Webhook Ready", "telegram": "notificado"}), 200
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 10000))
