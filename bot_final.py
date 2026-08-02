@@ -9,6 +9,7 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# CORRECCIÓN DE SINTAXIS: Inicialización nativa obligatoria para Flask en Render
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -64,6 +65,26 @@ def evaluar_filtro_anti_mechazo_directo(precio_origen):
         pass
     return False
 
+def calcular_atr_dinamico(periodos=14):
+    """Calcula la volatilidad real del mercado usando las últimas velas de 5 minutos."""
+    try:
+        if not binance_client:
+            return None
+        klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
+        
+        true_ranges = []
+        for i in range(1, len(klines)):
+            high = float(klines[i][2])
+            low = float(klines[i][3])
+            prev_close = float(klines[i-1][4])
+            
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            true_ranges.append(tr)
+            
+        return sum(true_ranges) / len(true_ranges)
+    except Exception:
+        return None
+
 def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     if not binance_client:
         return "Cliente Binance no inicializado"
@@ -71,12 +92,35 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     try:
         if fuerza_senal >= 0.0040:
             leverage = 20
-            tp_porcentaje = 0.0050  
-            sl_porcentaje = 0.0030  
+            multiplicador_tp = 2.0  
+            multiplicador_sl = 1.2  
         else:
             leverage = 10
-            tp_porcentaje = 0.0022  
-            sl_porcentaje = 0.0015  
+            multiplicador_tp = 1.5  
+            multiplicador_sl = 1.0  
+
+        atr = calcular_atr_dinamico()
+        
+        if atr is not None and atr > 0:
+            distancia_tp = atr * multiplicador_tp
+            distancia_sl = atr * multiplicador_sl
+            
+            if direccion == "LONG":
+                precio_tp = round(precio_mercado + distancia_tp, 2)
+                precio_sl = round(precio_mercado - distancia_sl, 2)
+            else:
+                precio_tp = round(precio_mercado - distancia_tp, 2)
+                precio_sl = round(precio_mercado + distancia_sl, 2)
+        else:
+            tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
+            sl_porcentaje = 0.0030 if fuerza_senal >= 0.0040 else 0.0015
+            
+            if direccion == "LONG":
+                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
+                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
+            else:
+                precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
+                precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
 
         binance_client.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
 
@@ -98,6 +142,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
 
+        # 1. ORDEN DE ENTRADA PRINCIPAL (MERCADO)
         binance_client.futures_create_order(
             symbol=SYMBOL, 
             side=side_entrada, 
@@ -105,14 +150,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
             quantity=quantity
         )
 
-        if direccion == "LONG":
-            precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
-            precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
-        else:
-            precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
-            precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
-
-        # CORRECCIÓN INSTITUCIONAL: Control estricto de cierre sin duplicar cantidades
+        # 2. ORDEN TAKE PROFIT MARKET (Control estricto de cierre sin duplicar cantidades)
         binance_client.futures_create_order(
             symbol=SYMBOL, 
             side=side_salida, 
@@ -120,7 +158,8 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
             stopPrice=precio_tp, 
             closePosition=True
         )
-        
+
+        # 3. ORDEN STOP MARKET (Control estricto de cierre sin duplicar cantidades)
         binance_client.futures_create_order(
             symbol=SYMBOL, 
             side=side_salida, 
@@ -129,7 +168,10 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
             closePosition=True
         )
 
-        msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " ACCION " + direccion + " ENTRADA " + str(precio_mercado) + " TP " + str(precio_tp) + " SL " + str(precio_sl)
+        tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
+        
+        # BLINDAJE DE INTERFAZ: Concatenación clásica sin f-strings para evitar roturas de formato
+        msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " | " + direccion + " | ENTRADA: " + str(precio_mercado) + " | TP: " + str(precio_tp) + " | SL: " + str(precio_sl) + " | GESTION: " + tipo_gestion
         enviar_telegram(msg)
         return "Exito"
 
@@ -172,6 +214,7 @@ def health():
     return jsonify({"status": "online", "motor": "Watson Webhook Ready", "telegram": "notificado"}), 200
 
 if __name__ == '__main__':
+    # Configuración estricta de arranque nativo de puerto para el contenedor de Render
     cadena_puerto = os.environ.get("PORT", "10000")
     puerto_numerico = int(cadena_puerto)
     app.run(host='0.0.0.0', port=puerto_numerico)
