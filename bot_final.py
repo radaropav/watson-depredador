@@ -11,7 +11,7 @@ from binance.streams import BinanceSocketManager
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa pura con guiones dobles para Flask
+# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -192,6 +192,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         account = binance_client.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
         
+        # CONTRASEGURO DE RIESGO INSTITUCIONAL
         if balance_disponible > 400.0:
             capital_operativo = balance_disponible * 0.25  
         else:
