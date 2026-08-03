@@ -11,7 +11,7 @@ from binance.streams import BinanceSocketManager
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# CORRECCIÓN DE SINTAXIS: Inicialización nativa para el contenedor de Render
+# CORRECCIÓN LETAL: Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -38,7 +38,6 @@ def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return
         
-    # Desglose en fragmentos puros para el bypass total de la interfaz de red
     protocolo = "https://"
     sub = "api."
     raiz = "telegram"
@@ -66,16 +65,21 @@ def manejar_flujo_websocket():
 
     while True:
         try:
-            # Precarga inicial del historial de velas HTTP una sola vez al conectar
             klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=15)
-            # Guardamos la estructura limpia mapeando a flotantes para evitar errores matemáticos posteriores
+            
             HISTORIAL_VELAS = []
             for k in klines[:-1]:
-                HISTORIAL_VELAS.append([k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])])
+                HISTORIAL_VELAS.append([
+                    k[0],
+                    float(k[1]),
+                    float(k[2]),
+                    float(k[3]),
+                    float(k[4]),
+                    float(k[5])
+                ])
             
             bsm = BinanceSocketManager(binance_client)
             
-            # BLINDAJE DE INTERFAZ: Eliminados f-strings con llaves para evitar alteraciones del chat
             stream_ticker = SYMBOL.lower() + "@ticker"
             stream_kline = SYMBOL.lower() + "@kline_5m"
             
@@ -98,7 +102,6 @@ def manejar_flujo_websocket():
                         es_vela_cerrada = kline_data.get('x', False)
                         
                         if es_vela_cerrada:
-                            # CORRECCIÓN DE TIPOS: Forzamos almacenamiento en flotantes para el cálculo del ATR
                             nueva_vela = [
                                 kline_data.get('t'),
                                 float(kline_data.get('o', 0.0)),
@@ -112,7 +115,6 @@ def manejar_flujo_websocket():
                                 HISTORIAL_VELAS.pop(0)
                                 
         except Exception:
-            # Reconexión automática silenciosa ante parpadeos de red en la nube
             time.sleep(5)
 
 def calcular_atr_dinamico_websocket(periodos=14):
@@ -227,7 +229,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
 
         tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
         
-        # BLINDAJE DE INTERFAZ: Concatenación clásica garantizada sin f-strings
         msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " | " + direccion + " | ENTRADA: " + str(precio_mercado) + " | TP: " + str(precio_tp) + " | SL: " + str(precio_sl) + " | GESTION: " + tipo_gestion + " (F2_STREAM)"
         enviar_telegram(msg)
         return "Exito"
@@ -259,3 +260,15 @@ def webhook():
 
     if not evaluar_filtro_anti_mechazo_directo(precio_actual):
         enviar_telegram("DISPARO CANCELADO MECHAZO DETECTADO EN ETH")
+        return jsonify({"status": "cancelado", "reason": "Filtro anti-mechazos activado"}), 200
+
+    resultado = ejecutar_caza_asimetrica(direccion, precio_actual, fuerza)
+    return jsonify({"status": "procesado", "resultado": resultado}), 200
+
+@app.route('/', methods=['GET', 'HEAD'])
+def index():
+    return jsonify({"status": "live", "service": "webhook_active"}), 200
+
+@app.route('/health', methods=['GET'])
+def health():
+    enviar_telegram("RADAR WATSON CONECTADO EN LINEA RECEPTOR LISTO")
