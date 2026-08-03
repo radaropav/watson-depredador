@@ -11,7 +11,7 @@ from binance.streams import BinanceSocketManager
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
+# Inicialización nativa con guiones dobles para Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -128,6 +128,7 @@ def calcular_atr_dinamico_websocket(periodos=14):
         velas_analisis = HISTORIAL_VELAS[-periodos-1:]
         
         for i in range(1, len(velas_analisis)):
+            # CORRECCIÓN INDUSTRIAL: Acceso estricto por índices de sublista
             high = velas_analisis[i][2]
             low = velas_analisis[i][3]
             prev_close = velas_analisis[i-1][4]
