@@ -217,12 +217,6 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health():
-    enviar_telegram("RADAR WATSON CONECTADO EN LINEA RECEPTOR LISTO")
-    return jsonify({"status": "online", "motor": "Watson Webhook Ready"}), 200
-
-# EL HACK SUPREMO: El WebSocket arranca aislado a nivel de precarga WSGI sin bloquear a Gunicorn
-hilo_websocket = threading.Thread(target=manejar_flujo_websocket, daemon=True)
-hilo_websocket.start()
-
-if __name__ == '__main__':
-    cadena_puerto = os.environ.get("PORT", "10000")
+    # MODIFICACIÓN DE ALTA PRIORIDAD: Menú de diagnóstico estético inyectado en vivo
+    precio_test = str(PRECIO_EN_VIVO) if PRECIO_EN_VIVO > 0 else "CONECTANDO_HTTP"
+    velas_test = str(len(HISTORIAL_VELAS))
