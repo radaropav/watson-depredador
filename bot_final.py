@@ -169,7 +169,7 @@ def index():
 @app.route('/health', methods=['GET'])
 def health():
     # INTERFAZ DE DIAGNÓSTICO INSTITUCIONAL COMPLETA
-    msg_health = "==================================\n   RADAR DIÁGNOSTICO WATSON V4    \n==================================\n• STATUS MOTOR: ONLINE (READY)\n• RENDIMIENTO : EXTRA FLASH HTTP\n• CONURRENCIA : BLINDADA MULTI-THREAD\n• ENTORNO     : BYPASS COMPATIBLE\n=================================="
+    msg_health = "==================================\n   RADAR DIÁGNOSTICO WATSON V4    \n==================================\n• STATUS MOTOR: ONLINE (READY)\n• RENDIMIENTO : EXTRA FLASH HTTP\n• CONCURRENCIA : BLINDADA MULTI-THREAD\n• ENTORNO     : BYPASS COMPATIBLE\n=================================="
     enviar_telegram(msg_health)
     return jsonify({"status": "online", "motor": "Watson Webhook Ready"}), 200
 
