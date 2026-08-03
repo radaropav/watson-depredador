@@ -69,21 +69,20 @@ def manejar_flujo_websocket():
         try:
             klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=15)
             
-            # SINCRO DE ENTRADA: Precarga forzando la conversión limpia a flotantes desde el inicio
+            # Conversión explícita a flotantes para evitar fallos matemáticos
             HISTORIAL_VELAS = []
             for k in klines[:-1]:
                 HISTORIAL_VELAS.append([
-                    k[0],           # Tiempo de apertura
-                    float(k[1]),    # Open
-                    float(k[2]),    # High
-                    float(k[3]),    # Low
-                    float(k[4]),    # Close
-                    float(k[5])     # Volume
+                    k[0],            # Tiempo de apertura
+                    float(k[1]),     # Open
+                    float(k[2]),     # High
+                    float(k[3]),     # Low
+                    float(k[4]),     # Close
+                    float(k[5])      # Volume
                 ])
             
             bsm = BinanceSocketManager(binance_client)
             
-            # BLINDAJE DE INTERFAZ: Eliminados f-strings con llaves para evitar alteraciones del chat
             stream_ticker = SYMBOL.lower() + "@ticker"
             stream_kline = SYMBOL.lower() + "@kline_5m"
             
@@ -106,7 +105,6 @@ def manejar_flujo_websocket():
                         es_vela_cerrada = kline_data.get('x', False)
                         
                         if es_vela_cerrada:
-                            # SINCRO DE WEBSOCKET: Homologamos la estructura exacta en flotantes
                             nueva_vela = [
                                 kline_data.get('t'),
                                 float(kline_data.get('o', 0.0)),
@@ -120,7 +118,6 @@ def manejar_flujo_websocket():
                                 HISTORIAL_VELAS.pop(0)
                                 
         except Exception:
-            # Reconexión automática silenciosa ante parpadeos de red en la nube
             time.sleep(5)
 
 def calcular_atr_dinamico_websocket(periodos=14):
@@ -133,7 +130,6 @@ def calcular_atr_dinamico_websocket(periodos=14):
         velas_analisis = HISTORIAL_VELAS[-periodos-1:]
         
         for i in range(1, len(velas_analisis)):
-            # CORRECCIÓN MECÁNICA: Mapeo exacto de índices sobre la lista de flotantes homologada
             high = velas_analisis[i][2]
             low = velas_analisis[i][3]
             prev_close = velas_analisis[i-1][4]
@@ -237,8 +233,8 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
 
         tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
         
-        # BLINDAJE DE INTERFAZ: Concatenación clásica garantizada sin f-strings
-        msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " | " + direccion + " | ENTRADA: " + str(precio_mercado) + " | TP: " + str(precio_tp) + " | SL: " + str(precio_sl) + " | GESTION: " + tipo_gestion + " (F2_STREAM)"
+        # BLINDAJE E INYECCIÓN DE VARIACIÓN: Agregada la fuerza de la señal en formato de cadena clásica
+        msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " | " + direccion + " | ENTRADA: " + str(precio_mercado) + " | TP: " + str(precio_tp) + " | SL: " + str(precio_sl) + " | VAR: " + str(fuerza_senal) + " | GESTION: " + tipo_gestion + " (F2_STREAM)"
         enviar_telegram(msg)
         return "Exito"
 
@@ -265,3 +261,7 @@ def webhook():
             ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
             precio_actual = float(ticker['price'])
         except Exception:
+            return jsonify({"status": "error", "reason": "No se pudo obtener precio base de Binance"}), 500
+
+    if not evaluar_filtro_anti_mechazo_directo(precio_actual):
+        enviar_telegram("DISPARO CANCELADO MECHAZO DETECTADO EN ETH")
