@@ -11,7 +11,7 @@ from binance.streams import BinanceSocketManager
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# CORRECCIÓN LETAL: Inicialización nativa con guiones dobles para el mapa de rutas de Flask
+# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -36,7 +36,7 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
-        return
+        return False
         
     protocolo = "https://"
     sub = "api."
@@ -54,8 +54,9 @@ def enviar_telegram(mensaje):
     
     try:
         requests.post(url, json=payload, headers=headers, timeout=5, verify=False)
+        return True
     except Exception:
-        pass
+        return False
 
 def manejar_flujo_websocket():
     """Hilo secundario que corre 24/7 leyendo el mercado de Binance en tiempo real."""
@@ -271,4 +272,3 @@ def index():
 
 @app.route('/health', methods=['GET'])
 def health():
-    enviar_telegram("RADAR WATSON CONECTADO EN LINEA RECEPTOR LISTO")
