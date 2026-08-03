@@ -1,10 +1,13 @@
 import os
 import time
+import threading
 import requests
 from flask import Flask, request, jsonify
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
+from binance.streams import BinanceSocketManager
 
+# Desactivar alertas de certificados inseguros para el bypass forzado
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -14,9 +17,14 @@ SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
+# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
+
+# MEMORIA RAM COMPARTIDA DE LECTURA ULTRA RÁPIDA
+PRECIO_EN_VIVO = 0.0
+HISTORIAL_VELAS = []
 
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
@@ -28,7 +36,7 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
-    # BYPASS EXTREMO: Fragmentación absoluta por variables para romper el bloqueo regional
+    # BYPASS EXTREMO: Fragmentación absoluta para romper el bloqueo regional en Gunicorn
     p = "https://"
     s = "api."
     r = "telegram"
@@ -39,22 +47,66 @@ def enviar_telegram(mensaje):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
-        # verify=False e inmunidad total a la inspección de paquetes
         requests.post(url, json=payload, headers=headers, timeout=4, verify=False)
         return True
     except Exception:
         return False
 
-def calcular_atr_dinamico_flash(periodos=14):
+def manejar_flujo_websocket():
+    """TÚNEL EN VIVO INDESTRUCTIBLE: Bucle autónomo en la capa del sistema."""
+    global PRECIO_EN_VIVO, HISTORIAL_VELAS
+    if not binance_client:
+        return
+
+    while True:
+        try:
+            klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=15)
+            HISTORIAL_VELAS = []
+            for k in klines[:-1]:
+                HISTORIAL_VELAS.append([k, float(k), float(k), float(k), float(k), float(k)])
+            
+            bsm = BinanceSocketManager(binance_client)
+            stream_ticker = SYMBOL.lower() + "@ticker"
+            stream_kline = SYMBOL.lower() + "@kline_5m"
+            
+            socket_stream = bsm.multiplex_socket([stream_ticker, stream_kline])
+            with socket_stream as stream:
+                while True:
+                    res = stream.recv()
+                    if not res:
+                        continue
+                    stream_name = res.get('stream', '')
+                    data = res.get('data', {})
+                    
+                    if 'ticker' in stream_name:
+                        PRECIO_EN_VIVO = float(data.get('c', 0.0))
+                    elif 'kline' in stream_name:
+                        kline_data = data.get('k', {})
+                        if kline_data.get('x', False):
+                            nueva_vela = [
+                                kline_data.get('t'),
+                                float(kline_data.get('o', 0.0)),
+                                float(kline_data.get('h', 0.0)),
+                                float(kline_data.get('l', 0.0)),
+                                float(kline_data.get('c', 0.0)),
+                                float(kline_data.get('v', 0.0))
+                            ]
+                            HISTORIAL_VELAS.append(nueva_vela)
+                            if len(HISTORIAL_VELAS) > 15:
+                                HISTORIAL_VELAS.pop(0)
+        except Exception:
+            time.sleep(5)
+
+def calcular_atr_dinamico_websocket(periodos=14):
     try:
-        if not binance_client:
+        if len(HISTORIAL_VELAS) < periodos:
             return None
-        klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
-        for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
+        velas_analisis = HISTORIAL_VELAS[-periodos-1:]
+        for i in range(1, len(velas_analisis)):
+            high = velas_analisis[i]
+            low = velas_analisis[i]
+            prev_close = velas_analisis[i-1]
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -64,10 +116,7 @@ def calcular_atr_dinamico_flash(periodos=14):
 def evaluar_filtro_anti_mechazo_directo(precio_origen):
     time.sleep(3)
     try:
-        if not binance_client:
-            return False
-        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
-        precio_actual = float(ticker['price'])
+        precio_actual = PRECIO_EN_VIVO if PRECIO_EN_VIVO > 0 else precio_origen
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
         return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
@@ -86,7 +135,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
             multiplicador_tp = 1.5  
             multiplicador_sl = 1.0  
 
-        atr = calcular_atr_dinamico_flash()
+        atr = calcular_atr_dinamico_websocket()
         if atr is not None and atr > 0:
             distancia_tp = atr * multiplicador_tp
             distancia_sl = atr * multiplicador_sl
@@ -145,11 +194,14 @@ def webhook():
     fuerza = float(data.get("variacion", 0.0))  
     if direccion not in ["LONG", "SHORT"]:
         return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
-    try:
-        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
-        precio_actual = float(ticker['price'])
-    except Exception:
-        return jsonify({"status": "error", "reason": "No se pudo precio base"}), 500
+    
+    precio_actual = PRECIO_EN_VIVO
+    if precio_actual == 0.0:
+        try:
+            ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
+            precio_actual = float(ticker['price'])
+        except Exception:
+            return jsonify({"status": "error", "reason": "No se pudo precio base"}), 500
 
     if not evaluar_filtro_anti_mechazo_directo(precio_actual):
         msg_cancelado = "==================================\n       DISPARO CANCELADO          \n==================================\n• MOTIVO: MECHAZO DETECTADO EN ETH\n=================================="
@@ -157,7 +209,7 @@ def webhook():
         return jsonify({"status": "cancelado", "reason": "Filtro anti-mechazos activado"}), 200
 
     resultado = ejecutar_caza_asimetrica(direccion, precio_actual, fuerza)
-    return jsonify({"status": "procesado", "resultado": resultado}), 200
+    return jsonify({"status": "processed", "resultado": resultado}), 200
 
 @app.route('/', methods=['GET', 'HEAD'])
 def index():
@@ -166,9 +218,11 @@ def index():
 @app.route('/health', methods=['GET'])
 def health():
     enviar_telegram("RADAR WATSON CONECTADO EN LINEA RECEPTOR LISTO")
-    return jsonify({"status": "online", "motor": "Watson Webhook Ready", "telegram": "notificado"}), 200
+    return jsonify({"status": "online", "motor": "Watson Webhook Ready"}), 200
+
+# EL HACK SUPREMO: El WebSocket arranca aislado a nivel de precarga WSGI sin bloquear a Gunicorn
+hilo_websocket = threading.Thread(target=manejar_flujo_websocket, daemon=True)
+hilo_websocket.start()
 
 if __name__ == '__main__':
     cadena_puerto = os.environ.get("PORT", "10000")
-    puerto_numerico = int(cadena_puerto)
-    app.run(host='0.0.0.0', port=puerto_numerico)
