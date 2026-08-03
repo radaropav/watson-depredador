@@ -26,6 +26,7 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 # MEMORIA RAM EN TIEMPO REAL (WEBSOCKET DATA)
 PRECIO_EN_VIVO = 0.0
 HISTORIAL_VELAS = []
+WEBSOCKET_INICIADO = False
 
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
@@ -38,7 +39,6 @@ def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
         
-    # Desglose en fragmentos puros para el bypass total de la interfaz de red
     protocolo = "https://"
     sub = "api."
     raiz = "telegram"
@@ -69,16 +69,15 @@ def manejar_flujo_websocket():
         try:
             klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=15)
             
-            # Conversión explícita a flotantes para evitar fallos matemáticos
             HISTORIAL_VELAS = []
             for k in klines[:-1]:
                 HISTORIAL_VELAS.append([
-                    k[0],            # Tiempo de apertura
-                    float(k[1]),     # Open
-                    float(k[2]),     # High
-                    float(k[3]),     # Low
-                    float(k[4]),     # Close
-                    float(k[5])      # Volume
+                    k[0],
+                    float(k[1]),
+                    float(k[2]),
+                    float(k[3]),
+                    float(k[4]),
+                    float(k[5])
                 ])
             
             bsm = BinanceSocketManager(binance_client)
@@ -193,7 +192,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         account = binance_client.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
         
-        # CONTRASEGURO DE RIESGO INSTITUCIONAL
         if balance_disponible > 400.0:
             capital_operativo = balance_disponible * 0.25  
         else:
@@ -233,7 +231,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
 
         tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
         
-        # BLINDAJE E INYECCIÓN DE VARIACIÓN: Agregada la fuerza de la señal en formato de cadena clásica
         msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " | " + direccion + " | ENTRADA: " + str(precio_mercado) + " | TP: " + str(precio_tp) + " | SL: " + str(precio_sl) + " | VAR: " + str(fuerza_senal) + " | GESTION: " + tipo_gestion + " (F2_STREAM)"
         enviar_telegram(msg)
         return "Exito"
@@ -244,6 +241,15 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     except Exception as e:
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
+
+@app.before_request
+def inicializar_websocket_en_produccion():
+    """Gancho seguro: Despierta el WebSocket secundario tras la primera petición de Render."""
+    global WEBSOCKET_INICIADO
+    if not WEBSOCKET_INICIADO:
+        hilo_websocket = threading.Thread(target=manejar_flujo_websocket, daemon=True)
+        hilo_websocket.start()
+        WEBSOCKET_INICIADO = True
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
