@@ -11,7 +11,7 @@ from binance.streams import BinanceSocketManager
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
+# Inicialización nativa pura con guiones dobles para Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -26,7 +26,6 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 # MEMORIA RAM EN TIEMPO REAL (WEBSOCKET DATA)
 PRECIO_EN_VIVO = 0.0
 HISTORIAL_VELAS = []
-WEBSOCKET_INICIADO = False
 
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
@@ -39,6 +38,7 @@ def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
         
+    # Desglose en fragmentos puros para el bypass total de la interfaz de red
     protocolo = "https://"
     sub = "api."
     raiz = "telegram"
@@ -231,7 +231,23 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
 
         tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
         
-        msg = "DEPREDADOR EJECUTADO x" + str(leverage) + " | " + direccion + " | ENTRADA: " + str(precio_mercado) + " | TP: " + str(precio_tp) + " | SL: " + str(precio_sl) + " | VAR: " + str(fuerza_senal) + " | GESTION: " + tipo_gestion + " (F2_STREAM)"
+        # ALERTA DE ALTO IMPACTO VISUAL INSTITUCIONAL SIN F-STRINGS
+        msg = (
+            "==================================\n"
+            "   SISTEMA DEPREDADOR OPERATIVO   \n"
+            "==================================\n"
+            "• ACTIVO      : " + str(SYMBOL) + "\n"
+            "• DIRECCION   : " + str(direccion) + "\n"
+            "• APALANCAMIENTO: x" + str(leverage) + "\n"
+            "----------------------------------\n"
+            "• ENTRADA     : " + str(precio_mercado) + "\n"
+            "• TAKE PROFIT : " + str(precio_tp) + "\n"
+            "• STOP LOSS   : " + str(precio_sl) + "\n"
+            "----------------------------------\n"
+            "• FUERZA SENAL: " + str(fuerza_senal) + "\n"
+            "• GESTION     : " + tipo_gestion + "\n"
+            "=================================="
+        )
         enviar_telegram(msg)
         return "Exito"
 
@@ -241,15 +257,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     except Exception as e:
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
-
-@app.before_request
-def inicializar_websocket_en_produccion():
-    """Gancho seguro: Despierta el WebSocket secundario tras la primera petición de Render."""
-    global WEBSOCKET_INICIADO
-    if not WEBSOCKET_INICIADO:
-        hilo_websocket = threading.Thread(target=manejar_flujo_websocket, daemon=True)
-        hilo_websocket.start()
-        WEBSOCKET_INICIADO = True
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -267,7 +274,3 @@ def webhook():
             ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
             precio_actual = float(ticker['price'])
         except Exception:
-            return jsonify({"status": "error", "reason": "No se pudo obtener precio base de Binance"}), 500
-
-    if not evaluar_filtro_anti_mechazo_directo(precio_actual):
-        enviar_telegram("DISPARO CANCELADO MECHAZO DETECTADO EN ETH")
