@@ -72,7 +72,7 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
     except Exception:
         return None
 
-def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
+def evaluar_filtro_anti_mechazo_direct(client_local, precio_origen):
     time.sleep(3)
     if not client_local:
         return False
@@ -162,10 +162,10 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# ENLACE SEGURO DE CICLO DE VIDA COMPATIBLE CON FLASK MODERNOS
+# ENLACE PERSISTENTE NATIVO INTEGRADO (BYPASS DE PRELOAD DE GUNICORN)
 # ------------------------------------------------------------------
 def inicializar_bot_completo():
-    time.sleep(3)
+    time.sleep(5)
     enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
     hilo_bot = threading.Thread(target=ciclo_monitoreo_automatico)
     hilo_bot.daemon = True
@@ -178,7 +178,7 @@ def disparar_inicializacion_unica():
         threading.Thread(target=inicializar_bot_completo).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED DIRECTO)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED HORIZONTAL)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -188,22 +188,19 @@ def home():
 def health_check():
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
-@app.route('/test-telegram', methods=['GET'])
-def test_telegram_directo():
-    resultado = "EXITO_PETICION" if enviar_telegram("SISTEMA WATSON: Test manual forzado de conectividad proxy.") else "FALLO_PETICION"
-    return jsonify({"status": "ejecutado", "respuesta": resultado}), 200
-
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
     global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
     datos = request.get_json(force=True) or {}
-    
     direccion = str(datos.get("direccion", "")).upper()
     fuerza_senal = float(datos.get("variacion", 0.0))
-    
     client_local = obtener_cliente_binance()
     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL) if client_local else {"price": "0.0"}
     precio_origen = float(ticker.get("price", 0.0))
     ULTIMO_PRECIO_MONITOREO = precio_origen
     
-    if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
+    if direccion not in ["LONG", "SHORT"] or precio_origen <= 0: return jsonify({"status": "error", "reason": "Parametros invalidos"}), 400
+    if not evaluar_filtro_anti_mechazo_direct(client_local, precio_origen):
+        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
+        enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
+        return jsonify({"status": "bloqueado", "reason": "Mechazo detectado"}), 200
