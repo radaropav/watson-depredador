@@ -42,6 +42,7 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
+    # BYPASS DE RED REGIONAL: Fragmentación absoluta para romper inspección de paquetes
     p = "https://"
     s = "api."
     r = "telegram"
@@ -92,7 +93,11 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     try:
         leverage = LEVERAGE_MANUAL
 
+        # ------------------------------------------------------------------
+        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
+        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
+            # MOTOR NUEVO: Micro-salidas fijas cortas para exprimir la lateralización de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -103,6 +108,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
+            # MOTOR CLÁSICO: Caza asimétrica por ATR dinámico
             atr = calcular_atr_dinamico_flash()
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -159,7 +165,7 @@ def dashboard_secreto():
     password_ingresado = request.args.get('auth') or request.form.get('auth_password')
     
     if not verificar_credenciales(password_ingresado):
-        return """<!DOCTYPE html><html><head><title>Watson Lock</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body { font-family: Arial; background: #0b0e11; color: #eaecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; } .lock-card { background: #181a20; padding: 30px; border-radius: 8px; border: 1px solid #2b2f36; text-align: center; } input { padding: 12px; background: #2b2f36; border: 1px solid #474d57; color: white; text-align: center; border-radius: 4px; } button { background: #f0b90b; border: none; padding: 12px; margin-top: 10px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; }</style></head><body><div class="lock-card"><h3 style="color:#f6465d;">ACCESO RESTRINGIDO</h3><form method="POST"><input type="password" name="auth_password" placeholder="Contrasena" required><br><button type="submit">DESBLOQUEAR</button></form></div></body></html>""", 401
+        return """<!DOCTYPE html><html><head><title>Lock</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body { background: #0b0e11; color: white; font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; } .card { background: #181a20; padding: 30px; border-radius: 8px; text-align: center; border: 1px solid #2b2f36; }</style></head><body><div class="card"><h3>ACCESO CONTROLADO</h3><form method="POST"><input type="password" name="auth_password" style="padding:10px; text-align:center;" placeholder="Clave" required><br><br><button type="submit" style="padding:10px; width:100%; background:#f0b90b; font-weight:bold; border:none; border-radius:4px;">DESBLOQUEAR</button></form></div></body></html>""", 401
 
     if request.method == 'POST':
         nuevo_modo = request.form.get("modo_bot")
@@ -182,3 +188,5 @@ def dashboard_secreto():
     opt_x10 = "selected" if LEVERAGE_MANUAL == 10 else ""
     opt_x20 = "selected" if LEVERAGE_MANUAL == 20 else ""
 
+    # HACK EXTREMO: Estilos en línea puros y strings planos concatenados. Cero riesgo de quiebre por parsing.
+    h = "<!DOCTYPE html><html><head><title>Watson Center</title><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10'></head>"
