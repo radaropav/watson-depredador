@@ -27,8 +27,6 @@ URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
 URL_TELEGRAM = os.getenv("URL_TELEGRAM")
 
-PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
-
 # VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
 LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
@@ -133,10 +131,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
 
-def verificar_credenciales(password_plano):
-    if not password_plano: return False
-    return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
-
 # ------------------------------------------------------------------
 # TÚNEL PERPETUO HTTPS FLASH MAXIMIZADO CON CACHÉ DINÁMICA
 # ------------------------------------------------------------------
@@ -162,7 +156,7 @@ def forzar_inicializacion_sincrona():
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB CON AISLAMIENTO DE RUTAS)
+# VÍAS DE ENTRADA (MÉTODOS WEB CON ACCESO LIBRE ATÓMICO)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def ruta_raiz_lineal():
@@ -170,7 +164,6 @@ def ruta_raiz_lineal():
 
 @app.route('/health', methods=['GET'])
 def ruta_health_lineal():
-    # Retorno sub-milisequndo puro para el monitor interno de Render sin bucles
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/webhook', methods=['POST'])
@@ -192,3 +185,11 @@ def ruta_webhook_lineal():
     resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
     return jsonify({"status": "procesado", "resultado": resultado}), 200
 
+@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
+def ruta_dashboard_lineal():
+    global ESTADO_BOT, LEVERAGE_MANUAL
+    # ACCESO DIRECTO LIBRE: Detona la red en el acto al cargar el endpoint plano
+    forzar_inicializacion_sincrona()
+    if request.method == 'POST':
+        datos = request.get_json(force=True) or {}
+        modo = str(datos.get("nuevo_modo", "")).upper()
