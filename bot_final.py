@@ -66,9 +66,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])      # Índice 2: Precio Máximo
-            low = float(klines[i][3])       # Índice 3: Precio Mínimo
-            prev_close = float(klines[i-1][4]) # Índice 4: Precio de Cierre anterior
+            high = float(klines[i])      # Índice 2: Precio Máximo
+            low = float(klines[i])       # Índice 3: Precio Mínimo
+            prev_close = float(klines[i-1]) # Índice 4: Precio de Cierre anterior
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -189,6 +189,10 @@ def ciclo_monitoreo_automatico():
 def home():
     return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
+
 @app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
 def dashboard_secreto():
     global ESTADO_BOT, LEVERAGE_MANUAL
@@ -205,7 +209,3 @@ def dashboard_secreto():
                 if modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
                     ESTADO_BOT = modo
             if "nuevo_leverage" in datos:
-                LEVERAGE_MANUAL = int(datos["nuevo_leverage"])
-        except Exception:
-            pass
-
