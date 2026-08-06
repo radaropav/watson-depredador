@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 # HACK DE INFRAESTRUCTURA: Enlazamos el puerto dinámico de Render a nivel global
 PUERTO_RENDER = int(os.environ.get("PORT", 10000))
-app.config['SERVER_NAME'] = None  # Desactiva restricciones estrictas de nombre de servidor
+app.config['SERVER_NAME'] = None
 
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
@@ -46,7 +46,6 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
-    # BYPASS DE RED REGIONAL: Fragmentación absoluta para romper la inspección de paquetes
     p = "https://"
     s = "api."
     r = "telegram"
@@ -69,9 +68,9 @@ def calcular_atr_dinamico_flash(periodos=14):
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i])
-            low = float(klines[i])
-            prev_close = float(klines[i-1])
+            high = float(klines[i][2])
+            low = float(klines[i][3])
+            prev_close = float(klines[i-1][4])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -101,7 +100,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
         # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
-            # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -112,7 +110,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
-            # MOTOR CLÁSICO: Depredador Flash asimétrico por ATR dinámico
             atr = calcular_atr_dinamico_flash()
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -120,6 +117,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
                 distancia_tp = atr * multiplicador_tp
                 distancia_sl = atr * multiplicador_sl
+                # CORRECCIÓN DEFINITIVA: Purgada la palabra parásita del cálculo matemático
                 precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
                 precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
             else:
@@ -164,9 +162,7 @@ def verificar_credenciales(password_plano):
 
 @app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
 def dashboard_secreto():
-    """CONTROL VIA JSON: Intercambio de modos dinámicos en caliente desde el teléfono."""
     global ESTADO_BOT, LEVERAGE_MANUAL
-    
     password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
     if not verificar_credenciales(password_ingresado):
         return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
@@ -175,12 +171,10 @@ def dashboard_secreto():
         data = request.get_json() or {}
         nuevo_modo = data.get("modo_bot")
         nuevo_leverage = data.get("leverage")
-        
         if nuevo_modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
             ESTADO_BOT = nuevo_modo
         if nuevo_leverage:
             LEVERAGE_MANUAL = int(nuevo_leverage)
-            
         return jsonify({"status": "success", "cambio_aplicado": ESTADO_BOT, "leverage_actual": LEVERAGE_MANUAL}), 200
 
     balance_usdt = 89.81
@@ -211,3 +205,10 @@ def webhook():
         return jsonify({"status": "paused", "reason": "La ejecucion del bot se encuentra congelada desde el Dashboard"}), 200
         
     data = request.get_json() or {}
+    direccion = data.get("direccion")  
+    fuerza = float(data.get("variacion", 0.0))  
+    
+    if direccion not in ["LONG", "SHORT"]: return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
+        
+    try:
+        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
