@@ -46,18 +46,15 @@ def obtener_cliente_binance():
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN or not URL_TELEGRAM:
-        print("TELEGRAM_LOG_FAIL: Faltan credenciales o variables de entorno URL_TELEGRAM")
-        return False
+        return "ERROR_CONFIG: Falta TELEGRAM_TOKEN o URL_TELEGRAM en variables"
     url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
-        print("TELEGRAM_LOG_RESPONSE: " + str(res.status_code) + " - Content: " + str(res.text))
-        return res.status_code == 200
+        return "STATUS_" + str(res.status_code) + "_RESP_" + str(res.text)
     except Exception as e:
-        print("TELEGRAM_LOG_EXCEPTION_ERROR: " + str(e))
-        return False
+        return "EXCEPTION_" + str(e)
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
     if not client_local:
@@ -175,6 +172,12 @@ def home():
 def health_check():
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
+# RUTA HACK DE DIAGNÓSTICO DIRECTO: Revela el estado real del proxy en pantalla
+@app.route('/test-telegram', methods=['GET'])
+def test_telegram_directo():
+    resultado = enviar_telegram("SISTEMA WATSON: Test manual forzado de conectividad proxy regional.")
+    return jsonify({"status": "ejecutado", "respuesta_servidor_telegram": resultado}), 200
+
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
     global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
@@ -196,8 +199,3 @@ def webhook_receptor():
         return jsonify({"status": "bloqueado", "reason": "Mechazo superado"}), 200
         
     resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
-    return jsonify({"status": "procesado", "resultado": resultado}), 200
-
-@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
-def dashboard_secreto():
-    global ESTADO_BOT, LEVERAGE_MANUAL
