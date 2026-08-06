@@ -152,32 +152,30 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
         except Exception: time.sleep(5)
 
-def ejecutar_arranque_atomico_secreto():
+def forzar_inicializacion_sincrona():
     global BOT_INICIALIZADO
     if not BOT_INICIALIZADO:
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Proyecto iniciado desde 0.")
+                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB CON INDENTACIÓN MÍNIMA HORIZONTAL)
+# VÍAS DE ENTRADA (MÉTODOS WEB CON AISLAMIENTO DE RUTAS)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def ruta_raiz_lineal():
-    ejecutar_arranque_atomico_secreto()
     return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/health', methods=['GET'])
 def ruta_health_lineal():
-    ejecutar_arranque_atomico_secreto()
+    # Retorno sub-milisequndo puro para el monitor interno de Render sin bucles
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/webhook', methods=['POST'])
 def ruta_webhook_lineal():
     global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
-    ejecutar_arranque_atomico_secreto()
     datos = request.get_json(force=True) or {}
     direccion = str(datos.get("direccion", "")).upper()
     fuerza_senal = float(datos.get("variacion", 0.0))
@@ -192,3 +190,5 @@ def ruta_webhook_lineal():
         enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
         return jsonify({"status": "bloqueado", "reason": "Mechazo detectado"}), 200
     resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
+    return jsonify({"status": "procesado", "resultado": resultado}), 200
+
