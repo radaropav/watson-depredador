@@ -6,28 +6,25 @@ from flask import Flask, request, jsonify
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
-# HACK DE INFRAESTRUCTURA: Inyección nativa del middleware de proxies para pulverizar el error 404 en Render
-from werkzeug.middleware.proxy_fix import ProxyFix
-
 # Desactivar alertas de certificados inseguros para el bypass forzado
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización con bindeo estricto de proxy inverso
+# Inicialización nativa con guiones dobles para Flask
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
+# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
 
-# VARIABLES GLOBALES DINÁMICAS (En memoria RAM de Render)
+# VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
 LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
 ULTIMO_PRECIO_MONITOREO = 0.0 
@@ -103,12 +100,8 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
             # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
-            if direccion == "LONG":
-                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
-            else:
-                precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
+            precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
+            precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
             # MOTOR CLÁSICO: Depredador Flash asimétrico por ATR dinámico
@@ -145,7 +138,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
-        # REGLA DE ORO MANDATORIA: Concatenación clásica limpia sin llaves nativas o f-strings
+        # REGLA DE ORO MANDATORIA: Concatenación clásica limpia libre de llaves nativas o f-strings
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
@@ -210,3 +203,5 @@ def webhook():
     direccion = data.get("direccion")  
     fuerza = float(data.get("variacion", 0.0))  
     
+    if direccion not in ["LONG", "SHORT"]: return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
+        
