@@ -54,7 +54,8 @@ def enviar_telegram(mensaje):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
-        requests.post(url, json=payload, headers=headers, timeout=4, verify=False)
+        # Aumento de timeout a 8 segundos para evitar quiebres por saturación de Render
+        requests.post(url, json=payload, headers=headers, timeout=8, verify=False)
         return True
     except Exception:
         return False
@@ -66,9 +67,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])      # Índice 2: Precio Máximo
-            low = float(klines[i][3])       # Índice 3: Precio Mínimo
-            prev_close = float(klines[i-1][4]) # Índice 4: Precio de Cierre anterior
+            high = float(klines[i])      # Índice 2: Precio Máximo
+            low = float(klines[i])       # Índice 3: Precio Mínimo
+            prev_close = float(klines[i-1]) # Índice 4: Precio de Cierre anterior
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -115,7 +116,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
                 distancia_tp = atr * multiplicador_tp
                 distancia_sl = atr * multiplicador_sl
-                precio_tp = round(precio_mercado + Plugins if direccion == "LONG" else precio_mercado - distancia_tp, 2)
+                precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
                 precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
                 tipo_gestion = "DINAMICA_ATR"
             else:
@@ -171,6 +172,9 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
+                    
+                    # --- AQUÍ AGREGAREMOS LAS CONDICIONES DE ENTRADA DE TU BOT ---
+                    
             time.sleep(5)  
         except Exception:
             time.sleep(5)
@@ -208,9 +212,3 @@ def dashboard_secreto():
         "estado_actual_bot": ESTADO_BOT,
         "leverage_actual": LEVERAGE_MANUAL,
         "ultimo_precio_visto": ULTIMO_PRECIO_MONITOREO,
-        "ultimo_atr_calculado": ULTIMO_ATR_MONITOREO,
-        "mechazos_bloqueados": CONTADOR_MECHAZOS
-    }), 200
-
-if __name__ == '__main__':
-    hilo_bot = threading.Thread(target=ciclo_monitoreo_automatico)
