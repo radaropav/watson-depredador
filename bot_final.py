@@ -42,27 +42,22 @@ BLOQUEO_ARRANQUE = threading.Lock()
 
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
-        try:
-            return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-        except Exception:
-            return None
+        try: return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
+        except Exception: return None
     return None
 
 def enviar_telegram(mensaje):
-    if not TELEGRAM_TOKEN or not URL_TELEGRAM:
-        return False
+    if not TELEGRAM_TOKEN or not URL_TELEGRAM: return False
     url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
         requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
         return True
-    except Exception:
-        return False
+    except Exception: return False
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
-    if not client_local:
-        return None
+    if not client_local: return None
     try:
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
@@ -73,29 +68,24 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
-    except Exception:
-        return None
+    except Exception: return None
 
 def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
     time.sleep(3)
-    if not client_local:
-        return False
+    if not client_local: return False
     try:
         ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
         precio_actual = float(ticker['price'])
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
         return variacion_micro <= FILTRO_MECHAZO_MAX
-    except Exception:
-        return False
+    except Exception: return False
 
 def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_senal):
     global ULTIMO_ATR_MONITOREO
-    if not client_local:
-        return "Cliente Binance no inicializado"
+    if not client_local: return "Cliente Binance no inicializado"
     try:
         leverage = 20 if fuerza_senal >= 0.0040 else 10
-        if ESTADO_BOT == "OFF":
-            return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
+        if ESTADO_BOT == "OFF": return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
         if ESTADO_BOT == "APLANAMIENTO":
             tp_porcentaje = 0.0025
@@ -124,8 +114,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         balance_disponible = float(account.get('availableBalance', 0))
         capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
         quantity = round((capital_operativo * leverage) / precio_mercado, 3)
-        if quantity <= 0:
-            return "Capital insuficiente"
+        if quantity <= 0: return "Capital insuficiente"
 
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
@@ -145,8 +134,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return str(e)
 
 def verificar_credenciales(password_plano):
-    if not password_plano:
-        return False
+    if not password_plano: return False
     return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
 
 # ------------------------------------------------------------------
@@ -162,8 +150,7 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     ULTIMO_PRECIO_MONITOREO = float(ticker['price'])
             time.sleep(5)
-        except Exception:
-            time.sleep(5)
+        except Exception: time.sleep(5)
 
 def ejecutar_arranque_atomico_secreto():
     global BOT_INICIALIZADO
@@ -175,17 +162,20 @@ def ejecutar_arranque_atomico_secreto():
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
 # ------------------------------------------------------------------
-# LOGICA DE CONTROL TOTALMENTE INDEPENDIENTE DE FUNCIONES TRADICIONALES
+# VÍAS DE ENTRADA (MÉTODOS WEB CON INDENTACIÓN MÍNIMA HORIZONTAL)
 # ------------------------------------------------------------------
-def procesar_ruta_raiz():
+@app.route('/', methods=['GET'])
+def ruta_raiz_lineal():
     ejecutar_arranque_atomico_secreto()
     return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
 
-def procesar_ruta_health():
+@app.route('/health', methods=['GET'])
+def ruta_health_lineal():
     ejecutar_arranque_atomico_secreto()
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
-def procesar_ruta_webhook():
+@app.route('/webhook', methods=['POST'])
+def ruta_webhook_lineal():
     global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
     ejecutar_arranque_atomico_secreto()
     datos = request.get_json(force=True) or {}
