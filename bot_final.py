@@ -42,7 +42,7 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
-    # BYPASS DE RED REGIONAL: Fragmentación absoluta para romper inspección de paquetes
+    # BYPASS DE RED REGIONAL: Fragmentación absoluta para romper la inspección de paquetes
     p = "https://"
     s = "api."
     r = "telegram"
@@ -97,7 +97,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
         # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
-            # MOTOR NUEVO: Micro-salidas fijas cortas para exprimir la lateralización de Asia
+            # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -108,7 +108,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
-            # MOTOR CLÁSICO: Caza asimétrica por ATR dinámico
+            # MOTOR CLÁSICO: Depredador Flash asimétrico por ATR dinámico
             atr = calcular_atr_dinamico_flash()
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -116,7 +116,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
                 distancia_tp = atr * multiplicador_tp
                 distancia_sl = atr * multiplicador_sl
-                precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
+                precio_tp = round(precio_mercado + Platdistancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
                 precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
             else:
                 tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
@@ -160,22 +160,27 @@ def verificar_credenciales(password_plano):
 
 @app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
 def dashboard_secreto():
-    global ESTADO_BOT, LEVERAGE_MANUAL, ULTIMO_PRECIO_MONITOREO
+    """HACK DE RESPUESTA DIRECTA: Control total e intercambio de modos vía API JSON pura."""
+    global ESTADO_BOT, LEVERAGE_MANUAL
     
-    password_ingresado = request.args.get('auth') or request.form.get('auth_password')
-    
+    password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
     if not verificar_credenciales(password_ingresado):
-        return """<!DOCTYPE html><html><head><title>Lock</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body { background: #0b0e11; color: white; font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; } .card { background: #181a20; padding: 30px; border-radius: 8px; text-align: center; border: 1px solid #2b2f36; }</style></head><body><div class="card"><h3>ACCESO CONTROLADO</h3><form method="POST"><input type="password" name="auth_password" style="padding:10px; text-align:center;" placeholder="Clave" required><br><br><button type="submit" style="padding:10px; width:100%; background:#f0b90b; font-weight:bold; border:none; border-radius:4px;">DESBLOQUEAR</button></form></div></body></html>""", 401
+        return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
 
     if request.method == 'POST':
-        nuevo_modo = request.form.get("modo_bot")
-        nuevo_leverage = request.form.get("leverage")
+        data = request.get_json() or {}
+        nuevo_modo = data.get("modo_bot")
+        nuevo_leverage = data.get("leverage")
+        
         if nuevo_modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
             ESTADO_BOT = nuevo_modo
         if nuevo_leverage:
             LEVERAGE_MANUAL = int(nuevo_leverage)
+            
+        return jsonify({"status": "success", "cambio_aplicado": ESTADO_BOT, "leverage_actual": LEVERAGE_MANUAL}), 200
 
     balance_usdt = 89.81
+    global ULTIMO_PRECIO_MONITOREO
     try:
         if binance_client:
             account = binance_client.futures_account()
@@ -185,8 +190,24 @@ def dashboard_secreto():
     except Exception:
         pass
 
-    opt_x10 = "selected" if LEVERAGE_MANUAL == 10 else ""
-    opt_x20 = "selected" if LEVERAGE_MANUAL == 20 else ""
+    return jsonify({
+        "SISTEMA": "WATSON CONTROL CENTER",
+        "ESTRATEGIA_ACTIVA": ESTADO_BOT,
+        "SALDO_DISPONIBLE_USDT": balance_usdt,
+        "PRECIO_ETH_BASE": ULTIMO_PRECIO_MONITOREO,
+        "MODULO_ATR_VOLATILIDAD": ULTIMO_ATR_MONITOREO,
+        "ESCUDOS_MECHAZO_EVADIDOS": CONTADOR_MECHAZOS,
+        "APALANCAMIENTO_BASE": LEVERAGE_MANUAL
+    }), 200
 
-    # HACK EXTREMO: Estilos en línea puros y strings planos concatenados. Cero riesgo de quiebre por parsing.
-    h = "<!DOCTYPE html><html><head><title>Watson Center</title><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='refresh' content='10'></head>"
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS
+    if ESTADO_BOT == "OFF":
+        return jsonify({"status": "paused", "reason": "La ejecucion del bot se encuentra congelada desde el Dashboard"}), 200
+        
+    data = request.get_json() or {}
+    direccion = data.get("direccion")  
+    fuerza = float(data.get("variacion", 0.0))  
+    
+    if direccion not in ["LONG", "SHORT"]:
