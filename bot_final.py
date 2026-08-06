@@ -99,7 +99,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
     try:
         # CAPA 1 (DISPARADOR): Apalancamiento asimétrico automático por fuerza de señal
         leverage = 20 if fuerza_senal >= 0.0040 else 10
-        
         if ESTADO_BOT == "OFF":
             return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
