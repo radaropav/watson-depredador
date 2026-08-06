@@ -10,24 +10,24 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa pura con guiones dobles para Flask
+# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
-# ASIGNACIONES EN PYTHON PURO (Sin palabras claves inválidas 'const')
-PUERTO_RENDER = int(os.environ.get("PORT", 10000))
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
+# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
+# CONFIGURACIÓN DE SEGURIDAD CRIPTOGRÁFICA (Clave por defecto: admin123)
 PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
 
-# VARIABLES GLOBALES DINÁMICAS ( RAM RENDER )
-ESTADO_BOT = "PREDADOR"       
-LEVERAGE_MANUAL = 10          
+# VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
+ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
+LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
 ULTIMO_PRECIO_MONITOREO = 0.0 
 ULTIMO_ATR_MONITOREO = 0.0    
 CONTADOR_MECHAZOS = 0         
@@ -43,12 +43,14 @@ def obtener_cliente_binance():
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
+    # REGLA DE ORO: Bypass regional fragmentado por variables individuales obligatorias
     p = "https://"
     s = "api."
     r = "telegram"
     t = ".org"
     m = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     url = p + s + r + t + m
+    
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
@@ -92,6 +94,9 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
     try:
         leverage = LEVERAGE_MANUAL
 
+        # ------------------------------------------------------------------
+        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
+        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
@@ -132,6 +137,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
+        # REGLA DE ORO: Concatenación clásica sin f-strings en alertas de Telegram
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
@@ -203,11 +209,4 @@ def webhook():
     if not client_local:
         return jsonify({"status": "error", "reason": "No se pudo inicializar cliente de Binance"}), 500
 
-    ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-    precio_actual = float(ticker['price'])
-    ULTIMO_PRECIO_MONITOREO = precio_actual
-
-    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-        CONTADOR_MECHAZOS += 1
-        msg_cancelado = "==================================\n       DISPARO CANCELADO          \n==================================\n• MOTIVO: MECHAZO DETECTADO EN ETH\n=================================="
-        enviar_telegram(msg_cancelado)
+    try:
