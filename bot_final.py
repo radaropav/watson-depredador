@@ -116,7 +116,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
                 distancia_tp = atr * multiplicador_tp
                 distancia_sl = atr * multiplicador_sl
-                precio_tp = round(precio_mercado + Platdistancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
+                precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
                 precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
             else:
                 tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
