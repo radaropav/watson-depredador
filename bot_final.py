@@ -10,7 +10,7 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa pura con guiones dobles para Flask
+# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -42,7 +42,6 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
-    # BYPASS DE RED REGIONAL: Fragmentación absoluta para romper inspección de paquetes
     p = "https://"
     s = "api."
     r = "telegram"
@@ -93,11 +92,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     try:
         leverage = LEVERAGE_MANUAL
 
-        # ------------------------------------------------------------------
-        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL (PREDADOR / APLANAMIENTO)
-        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
-            # MOTOR DE COMPRESIÓN: Micro-salidas del 0.25% para reversión a la media
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -108,7 +103,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
-            # MOTOR CLÁSICO: Depredador de rupturas asimétricas por ATR
             atr = calcular_atr_dinamico_flash()
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -188,4 +182,3 @@ def dashboard_secreto():
     opt_x10 = "selected" if LEVERAGE_MANUAL == 10 else ""
     opt_x20 = "selected" if LEVERAGE_MANUAL == 20 else ""
 
-    # BLINDAJE DE CONCATENACIÓN PLANA: Soluciona el colapso de llaves del CSS con .format()
