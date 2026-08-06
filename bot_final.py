@@ -64,9 +64,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])        # Índice 2: Precio Máximo de la vela
-            low = float(klines[i][3])         # Índice 3: Precio Mínimo de la vela
-            prev_close = float(klines[i-1][4]) # Índice 4: Precio de Cierre de la vela anterior
+            high = float(klines[i])        # Índice 2: Precio Máximo de la vela
+            low = float(klines[i])         # Índice 3: Precio Mínimo de la vela
+            prev_close = float(klines[i-1]) # Índice 4: Precio de Cierre de la vela anterior
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -134,6 +134,11 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
 # ------------------------------------------------------------------
 # PILAR 3: LIVE DATA FEED CENTER (WEBHOOK Y DASHBOARD)
 # ------------------------------------------------------------------
+@app.route('/', methods=['GET'])
+def home():
+    # SOLUCIÓN AL ERROR 404: Ruta raíz obligatoria para el proxy inverso de Render
+    return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
+
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
     global CONTADOR_MECHAZOS
