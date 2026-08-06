@@ -36,10 +36,6 @@ ULTIMO_PRECIO_MONITOREO = 0.0
 ULTIMO_ATR_MONITOREO = 0.0    
 CONTADOR_MECHAZOS = 0         
 
-# Banderas de control de inicialización a nivel de aplicación Flask
-FLAG_INICIALIZADO = False
-BLOQUEO_HILO = threading.Lock()
-
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try:
@@ -50,14 +46,17 @@ def obtener_cliente_binance():
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN or not URL_TELEGRAM:
+        print("TELEGRAM_LOG_FAIL: Faltan credenciales o variables de entorno URL_TELEGRAM")
         return False
     url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
-        requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
-        return True
-    except Exception:
+        res = requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
+        print("TELEGRAM_LOG_RESPONSE: " + str(res.status_code) + " - Content: " + str(res.text))
+        return res.status_code == 200
+    except Exception as e:
+        print("TELEGRAM_LOG_EXCEPTION_ERROR: " + str(e))
         return False
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
@@ -166,24 +165,8 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y MANEJO DE CICLOS DE VIDA EN FLASK)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED)
 # ------------------------------------------------------------------
-@app.before_request
-def inicializar_motores_en_produccion():
-    global FLAG_INICIALIZADO
-    # El gancho intercepta la primera peticion legitima (como el health check de Render)
-    # Levantando el bot de forma síncrona dentro del hilo maestro sin ser purgado por Gunicorn
-    if not FLAG_INICIALIZADO:
-        with BLOQUEO_HILO:
-            if not FLAG_INICIALIZADO:
-                # Hack de Disparo Síncrono Directo: Forzamos la alerta antes de prender el bucle analítico
-                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
-                
-                hilo_activo = threading.Thread(target=ciclo_monitoreo_automatico)
-                hilo_activo.daemon = True
-                hilo_activo.start()
-                FLAG_INICIALIZADO = True
-
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
@@ -207,3 +190,14 @@ def webhook_receptor():
     
     if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
         return jsonify({"status": "error", "reason": "Parametros invalidos o API caida"}), 400
+    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
+        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
+        enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
+        return jsonify({"status": "bloqueado", "reason": "Mechazo superado"}), 200
+        
+    resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
+    return jsonify({"status": "procesado", "resultado": resultado}), 200
+
+@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
+def dashboard_secreto():
+    global ESTADO_BOT, LEVERAGE_MANUAL
