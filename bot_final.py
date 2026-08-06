@@ -89,7 +89,9 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
     if not client_local:
         return "Cliente Binance no inicializado"
     try:
-        leverage = LEVERAGE_MANUAL
+        # PARÁMETRO MATEMÁTICO 2: Modos Agresivo (x20) y Seguro (x10) automatizados por fuerza
+        leverage = 20 if fuerza_senal >= 0.0040 else 10
+
         if ESTADO_BOT == "OFF":
             return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
@@ -118,6 +120,8 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = client_local.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
+        
+        # PARÁMETRO MATEMÁTICO 3: Algoritmo de gestión de capital dinámico
         capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
         quantity = round((capital_operativo * leverage) / precio_mercado, 3)
         if quantity <= 0:
@@ -146,7 +150,7 @@ def verificar_credenciales(password_plano):
     return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
 
 # ------------------------------------------------------------------
-# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (BOT FUERTE ANALÍTICO)
+# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (BOT FUERTE ANALÍTICO CON CACHÉ)
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO
@@ -164,7 +168,7 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED DIRECTO)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y RECEPTOR DE SEÑALES FORMATO MANDATORIO)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -176,31 +180,25 @@ def health_check():
 
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
-    global CONTADOR_MECHAZOS
+    global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
     datos = request.get_json(force=True) or {}
-    if "action" not in datos or "price" not in datos:
-        return jsonify({"status": "error", "reason": "Faltan parametros"}), 400
-        
-    direccion = str(datos.get("action")).upper()
-    precio_origen = float(datos.get("price"))
-    fuerza_senal = float(datos.get("fuerza", 0.0))
-    client_local = obtener_cliente_binance()
     
+    # PARÁMETRO FORMATO OBLIGATORIO 4: Mapeo exacto de claves de tu documento
+    direccion = str(datos.get("direccion", "")).upper()
+    fuerza_senal = float(datos.get("variacion", 0.0))
+    
+    client_local = obtener_cliente_binance()
+    ticker = client_local.futures_symbol_ticker(symbol=SYMBOL) if client_local else {"price": "0.0"}
+    precio_origen = float(ticker.get("price", 0.0))
+    ULTIMO_PRECIO_MONITOREO = precio_origen
+    
+    if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
+        return jsonify({"status": "error", "reason": "Parametros invalidos o API caida"}), 400
+        
+    # CAPA 2: Filtro Anti-Mechazo con alerta mandatoria a Telegram si falla
     if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
         CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
         enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
         return jsonify({"status": "bloqueado", "reason": "Mechazo superado"}), 200
         
     resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
-    return jsonify({"status": "procesado", "resultado": resultado}), 200
-
-@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
-def dashboard_secreto():
-    global ESTADO_BOT, LEVERAGE_MANUAL
-    password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
-    if not verificar_credenciales(password_ingresado):
-        return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
-        
-    if request.method == 'POST':
-        datos = request.get_json(force=True) or {}
-        modo = str(datos.get("nuevo_modo", "")).upper()
