@@ -10,11 +10,9 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
+# Inicialización con anulación estricta de restricciones de nombre de host
 app = Flask(__name__)
-
-# CONFIGURACIÓN NATIVA DE RED PARA EL PUERTO DINÁMICO DE RENDER
-PUERTO_RENDER = int(os.environ.get("PORT", 10000))
+app.config['SERVER_NAME'] = None
 
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
@@ -26,7 +24,6 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
 
-# VARIABLES GLOBALES DINÁMICAS (En memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       
 LEVERAGE_MANUAL = 10          
 ULTIMO_PRECIO_MONITOREO = 0.0 
@@ -93,9 +90,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
     try:
         leverage = LEVERAGE_MANUAL
 
-        # ------------------------------------------------------------------
-        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
-        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
@@ -214,3 +208,7 @@ def webhook():
     except Exception:
         return jsonify({"status": "error", "reason": "Fallo de conexion síncrona con Binance"}), 500
 
+    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
+        CONTADOR_MECHAZOS += 1
+        msg_cancelado = "==================================\n       DISPARO CANCELADO          \n==================================\n• MOTIVO: MECHAZO DETECTADO EN ETH\n=================================="
+        enviar_telegram(msg_cancelado)
