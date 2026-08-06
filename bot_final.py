@@ -66,9 +66,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])      # Arreglado: Índice 2 es el precio Máximo
-            low = float(klines[i][3])       # Arreglado: Índice 3 es el precio Mínimo
-            prev_close = float(klines[i-1][4]) # Arreglado: Índice 4 es el precio de Cierre anterior
+            high = float(klines[i][2])      # Índice 2: Precio Máximo
+            low = float(klines[i][3])       # Índice 3: Precio Mínimo
+            prev_close = float(klines[i-1][4]) # Índice 4: Precio de Cierre anterior
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -164,7 +164,7 @@ def verificar_credenciales(password_plano):
 # MOTOR DE AUTO-GENERACIÓN DE SEÑALES (EL BOT FUERTE EN BUCLE)
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
-    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS
+    global ULTIMO_PRECIO_MONITOREO
     while True:
         try:
             if ESTADO_BOT != "OFF":
@@ -174,10 +174,10 @@ def ciclo_monitoreo_automatico():
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
                     
-                    # --- AQUÍ VA TU ESTRATEGIA MATEMÁTICA / GENERADORA DE SEÑALES VIA SCRIPT ---
-                    # Este bucle revisa el mercado constantemente para detonar 'ejecutar_caza_asimetrica'
+                    # --- AQUÍ VA TU ESTRATEGIA DE AUTO-GENERACIÓN ---
+                    # El bucle escanea precios e inicializa la operación solo.
                     
-            time.sleep(5)  # Frecuencia de escaneo automática del mercado
+            time.sleep(5)  
         except Exception:
             time.sleep(5)
 
@@ -203,3 +203,9 @@ def dashboard_secreto():
                 modo = str(datos["nuevo_modo"]).upper()
                 if modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
                     ESTADO_BOT = modo
+            if "nuevo_leverage" in datos:
+                LEVERAGE_MANUAL = int(datos["nuevo_leverage"])
+        except Exception:
+            pass
+
+    return jsonify({
