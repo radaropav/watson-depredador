@@ -54,7 +54,8 @@ def enviar_telegram(mensaje):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
-        requests.post(url, json=payload, headers=headers, timeout=10, verify=False)
+        # Hack de red asíncrona: Timeout alto de 12 segundos para evitar cortes en Render plan Free
+        requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
         return True
     except Exception:
         return False
@@ -98,6 +99,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
         # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
+            # BOT DE EJECUCIÓN: Mercado lateral de Asia (Rangos micro comprimidos)
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -108,6 +110,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
+            # BOT DE EJECUCIÓN: Motor clásico por volatilidad ATR asimétrica
             atr = calcular_atr_dinamico_flash(client_local)
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -142,6 +145,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
+        # REGLA DE ORO MANDATORIA: Mensajería con concatenación clásica uniendo variables mediante (+ str())
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
@@ -159,13 +163,13 @@ def verificar_credenciales(password_plano):
     return hash_ingresado == PASSWORD_HASH_SECRETO
 
 # ------------------------------------------------------------------
-# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (EL BOT FUERTE EN BUCLE)
+# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (BOT FUERTE ANALÍTICO CON CACHÉ)
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO
-    # SOLUCIÓN HACK DE RED: Retardo asíncrono controlado de 5 segundos antes de inyectar alertas de red
-    time.sleep(5)
-    enviar_telegram("SISTEMA WATSON: Instancia y sockets acoplados con exito en Render. Modo Auto listo.")
+    # Hack definitivo de acoplamiento de hilos de red en Render Free
+    time.sleep(8)
+    enviar_telegram("SISTEMA WATSON: Red estable y tunel HTTPS enlazado. Ambos motores inicializados.")
     
     while True:
         try:
@@ -174,13 +178,17 @@ def ciclo_monitoreo_automatico():
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
+                    # Registro plano en la memoria caché RAM de Render
                     ULTIMO_PRECIO_MONITOREO = precio_actual
+                    
+                    # --- AQUÍ OPERA LA INTERFAZ DE CONDICIONES DE TU ESTRATEGIA FUERTE ---
+                    
             time.sleep(5)  
         except Exception:
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD CRIPTOGRÁFICO PLANO)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -197,17 +205,3 @@ def dashboard_secreto():
     
     if not verificar_credenciales(password_ingresado):
         return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
-        
-    if request.method == 'POST':
-        datos = request.get_json(force=True) or {}
-        modo = str(datos.get("nuevo_modo", "")).upper()
-        if modo == "OFF" or modo == "PREDADOR" or modo == "APLANAMIENTO":
-            ESTADO_BOT = modo
-        if "nuevo_leverage" in datos:
-            LEVERAGE_MANUAL = int(datos.get("nuevo_leverage", 10))
-
-    return jsonify({
-        "status": "success",
-        "activo": SYMBOL,
-        "estado_actual_bot": ESTADO_BOT,
-        "leverage_actual": LEVERAGE_MANUAL,
