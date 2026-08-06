@@ -36,7 +36,7 @@ ULTIMO_PRECIO_MONITOREO = 0.0
 ULTIMO_ATR_MONITOREO = 0.0    
 CONTADOR_MECHAZOS = 0         
 
-# Cerrojeros de inicialización aplanados en memoria RAM
+# Cerrojeros de inicialización atómica en memoria RAM
 BOT_INICIALIZADO = False
 BLOQUEO_ARRANQUE = threading.Lock()
 
@@ -51,6 +51,8 @@ def obtener_cliente_binance():
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN or not URL_TELEGRAM:
         return False
+    # REGLA DE ORO MANDATORIA: Ensamblaje puro usando tu variable proxy URL_TELEGRAM externa
+    # Se concatena de forma limpia mediante (+ str()) libre de llaves o f-strings
     url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
@@ -77,12 +79,14 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         return None
 
 def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
+    # CAPA 2 (FILTRO): Tiempo de espera pasivo de 3 segundos exactos
     time.sleep(3)
     if not client_local:
         return False
     try:
         ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
         precio_actual = float(ticker['price'])
+        # Fórmula Micro-Variación calculada en la RAM local
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
         return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception:
@@ -93,17 +97,24 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
     if not client_local:
         return "Cliente Binance no inicializado"
     try:
+        # CAPA 1 (DISPARADOR): Apalancamiento asimétrico automático por fuerza de señal
         leverage = 20 if fuerza_senal >= 0.0040 else 10
+        
         if ESTADO_BOT == "OFF":
             return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
+        # ------------------------------------------------------------------
+        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL (BOT DE EJECUCIÓN)
+        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
+            # MODO APLANAMIENTO: Micro-salidas fijas cortas para consolidación lateral de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
             precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
+            # MODO PREDADOR: Motor tendencial asimétrico por volatilidad ATR de 5 minutos
             atr = calcular_atr_dinamico_flash(client_local)
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -122,6 +133,8 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = client_local.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
+        
+        # CAPA 3 (GESTIÓN CAPITAL): Ecuación Lote Nocional con discriminación de balance ($400)
         capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
         quantity = round((capital_operativo * leverage) / precio_mercado, 3)
         if quantity <= 0:
@@ -134,10 +147,12 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
+        # CAPA 4 (CONTACTO): Reporte obligatorio e inmediato formateado a Telegram
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
     except BinanceAPIException as e:
+        # CAPA DE ENFERMEDAD/EMERGENCIA: Atrapa errores del servidor de Binance y notifica
         enviar_telegram("BINANCE_API_ERROR " + str(e.message))
         return e.message
     except Exception as e:
@@ -150,7 +165,7 @@ def verificar_credenciales(password_plano):
     return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
 
 # ------------------------------------------------------------------
-# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (BOT FUERTE ANALÍTICO)
+# TÚNEL PERPETUO HTTPS FLASH MAXIMIZADO CON CACHÉ DINÁMICA
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO
@@ -160,50 +175,24 @@ def ciclo_monitoreo_automatico():
                 client_local = obtener_cliente_binance()
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
+                    # Caché dinámica directa guardada instantáneamente en la memoria RAM
                     ULTIMO_PRECIO_MONITOREO = float(ticker['price'])
             time.sleep(5)
         except Exception:
             time.sleep(5)
 
+# Gatillador maestro síncrono blindado contra la pre-carga (Hereda la red proxy al worker)
 def ejecutar_arranque_atomico_secreto():
     global BOT_INICIALIZADO
     if not BOT_INICIALIZADO:
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
+                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Proyecto iniciado desde 0.")
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y RECEPTOR DE SEÑALES FORMATO MANDATORIO)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED INTERACTIVO)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
-    ejecutar_arranque_atomico_secreto()
-    return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    ejecutar_arranque_atomico_secreto()
-    return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
-
-@app.route('/webhook', methods=['POST'])
-def webhook_receptor():
-    global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
-    ejecutar_arranque_atomico_secreto()
-    datos = request.get_json(force=True) or {}
-    
-    direccion = str(datos.get("direccion", "")).upper()
-    fuerza_senal = float(datos.get("variacion", 0.0))
-    
-    client_local = obtener_cliente_binance()
-    ticker = client_local.futures_symbol_ticker(symbol=SYMBOL) if client_local else {"price": "0.0"}
-    precio_origen = float(ticker.get("price", 0.0))
-    ULTIMO_PRECIO_MONITOREO = precio_origen
-    
-    if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
-        return jsonify({"status": "error", "reason": "Parametros invalidos"}), 400
-        
-    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
-        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
-        enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
