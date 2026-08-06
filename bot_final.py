@@ -23,7 +23,6 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
-# REGLA 3: Carga nativa del bypass regional desde tus variables de entorno de Render
 URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
 URL_TELEGRAM = os.getenv("URL_TELEGRAM")
@@ -40,7 +39,6 @@ CONTADOR_MECHAZOS = 0
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try:
-            # Inicialización del cliente usando la variable de entorno base de Binance si es necesario
             return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
         except Exception:
             return None
@@ -49,11 +47,7 @@ def obtener_cliente_binance():
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN or not URL_TELEGRAM:
         return False
-    
-    # REGLA DE ORO MANDATORIA: Ensamblaje puro usando tu variable proxy URL_TELEGRAM externa
-    # Se concatena de forma limpia mediante (+ str()) libre de llaves o f-strings
     url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
-    
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
@@ -69,9 +63,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i])      # Índice 2: Precio Máximo
-            low = float(klines[i])       # Índice 3: Precio Mínimo
-            prev_close = float(klines[i-1]) # Índice 4: Precio de Cierre anterior
+            high = float(klines[i])
+            low = float(klines[i])
+            prev_close = float(klines[i-1])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -96,22 +90,14 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return "Cliente Binance no inicializado"
     try:
         leverage = LEVERAGE_MANUAL
-        
         if ESTADO_BOT == "OFF":
             return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
-        # ------------------------------------------------------------------
-        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL (BOT DE EJECUCIÓN)
-        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
-            if direccion == "LONG":
-                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
-            else:
-                precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
+            precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
+            precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
             atr = calcular_atr_dinamico_flash(client_local)
@@ -119,10 +105,8 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
             if atr is not None and atr > 0:
                 multiplicador_tp = 2.0 if fuerza_senal >= 0.0040 else 1.5
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
-                distancia_tp = atr * multiplicador_tp
-                distancia_sl = atr * multiplicador_sl
-                precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
-                precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
+                precio_tp = round(precio_mercado + (atr * multiplicador_tp), 2) if direccion == "LONG" else round(precio_mercado - (atr * multiplicador_tp), 2)
+                precio_sl = round(precio_mercado - (atr * multiplicador_sl), 2) if direccion == "LONG" else round(precio_mercado + (atr * multiplicador_sl), 2)
                 tipo_gestion = "DINAMICA_ATR"
             else:
                 tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
@@ -134,10 +118,8 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = client_local.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
-        
         capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
-        cantidad_nocional = (capital_operativo * leverage) / precio_mercado
-        quantity = round(cantidad_nocional, 3) 
+        quantity = round((capital_operativo * leverage) / precio_mercado, 3)
         if quantity <= 0:
             return "Capital insuficiente"
 
@@ -148,7 +130,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
-        # REGLA DE ORO MANDATORIA: Mensajería con concatenación clásica uniendo variables mediante (+ str())
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
@@ -162,35 +143,28 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
 def verificar_credenciales(password_plano):
     if not password_plano:
         return False
-    hash_ingresado = hashlib.sha256(password_plano.encode('utf-8')).hexdigest()
-    return hash_ingresado == PASSWORD_HASH_SECRETO
+    return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
 
 # ------------------------------------------------------------------
-# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (BOT FUERTE ANALÍTICO CON CACHÉ)
+# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (BOT FUERTE ANALÍTICO)
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO
-    # Retardo asíncrono para asegurar el correcto bindeo del proxy de Render
     time.sleep(10)
     enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
-    
     while True:
         try:
             if ESTADO_BOT != "OFF":
                 client_local = obtener_cliente_binance()
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-                    precio_actual = float(ticker['price'])
-                    ULTIMO_PRECIO_MONITOREO = precio_actual
-                    
-                    # --- INTERFAZ NEUTRA DE TU ESTRATEGIA FUERTE ---
-                    
-            time.sleep(5)  
+                    ULTIMO_PRECIO_MONITOREO = float(ticker['price'])
+            time.sleep(5)
         except Exception:
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD CRIPTOGRÁFICO PLANO)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -204,5 +178,30 @@ def health_check():
 def webhook_receptor():
     global CONTADOR_MECHAZOS
     datos = request.get_json(force=True) or {}
-    
     if "action" not in datos or "price" not in datos:
+        return jsonify({"status": "error", "reason": "Faltan parametros"}), 400
+        
+    direccion = str(datos.get("action")).upper()
+    precio_origen = float(datos.get("price"))
+    fuerza_senal = float(datos.get("fuerza", 0.0))
+    client_local = obtener_cliente_binance()
+    
+    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
+        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
+        enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
+        return jsonify({"status": "bloqueado", "reason": "Mechazo superado"}), 200
+        
+    resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
+    return jsonify({"status": "procesado", "resultado": resultado}), 200
+
+@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
+def dashboard_secreto():
+    global ESTADO_BOT, LEVERAGE_MANUAL
+    password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
+    if not verificar_credenciales(password_ingresado):
+        return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
+        
+    if request.method == 'POST':
+        datos = request.get_json(force=True) or {}
+        modo = str(datos.get("nuevo_modo", "")).upper()
+        if modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
