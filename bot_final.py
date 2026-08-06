@@ -10,7 +10,7 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
+# Inicialización nativa pura con guiones dobles para Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -94,57 +94,41 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         leverage = LEVERAGE_MANUAL
 
         # ------------------------------------------------------------------
-        # INNOVACIÓN: CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
+        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL (PREDADOR / APLANAMIENTO)
         # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
-            # MOTOR NUEVO: Diseñado para explotar la compresión de las medias móviles en rangos laterales
-            # Cerramos con micro-salidas fijas y cortas del 0.25% para asegurar ganancias antes de que el rango rompa
+            # MOTOR DE COMPRESIÓN: Micro-salidas del 0.25% para reversión a la media
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
-            
             if direccion == "LONG":
                 precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
                 precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
             else:
                 precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
-                
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
-            # MOTOR CLÁSICO: Depredador Flash de rupturas y tendencias asimétricas por ATR
+            # MOTOR CLÁSICO: Depredador de rupturas asimétricas por ATR
             atr = calcular_atr_dinamico_flash()
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
-            
             if atr is not None and atr > 0:
                 multiplicador_tp = 2.0 if fuerza_senal >= 0.0040 else 1.5
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
                 distancia_tp = atr * multiplicador_tp
                 distancia_sl = atr * multiplicador_sl
-                
-                if direccion == "LONG":
-                    precio_tp = round(precio_mercado + distancia_tp, 2)
-                    precio_sl = round(precio_mercado - distancia_sl, 2)
-                else:
-                    precio_tp = round(precio_mercado - distancia_tp, 2)
-                    precio_sl = round(precio_mercado + distancia_sl, 2)
+                precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
+                precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
             else:
                 tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
                 sl_porcentaje = 0.0030 if fuerza_senal >= 0.0040 else 0.0015
-                
-                if direccion == "LONG":
-                    precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
-                    precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
-                else:
-                    precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
-                    precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
-                    
+                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
+                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
 
         binance_client.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = binance_client.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
         
-        # Contraseguro institucional estricto sobre tus $89.81 USDT
         capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
         cantidad_nocional = (capital_operativo * leverage) / precio_mercado
         quantity = round(cantidad_nocional, 3) 
@@ -154,10 +138,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
 
-        # 1. ORDEN PRINCIPAL A MERCADO
         binance_client.futures_create_order(symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
-        
-        # 2. SEGUROS DE CIERRE AUTOMÁTICOS (Corrección: Booleanos nativos sin comisiones duplicadas)
         binance_client.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         binance_client.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
@@ -184,20 +165,27 @@ def dashboard_secreto():
     password_ingresado = request.args.get('auth') or request.form.get('auth_password')
     
     if not verificar_credenciales(password_ingresado):
-        html_bloqueo = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Watson Security Lock</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-                body {{ font-family: Arial, sans-serif; background: #0b0e11; color: #eaecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-                .lock-card {{ background: #181a20; padding: 30px; border-radius: 8px; border: 1px solid #2b2f36; text-align: center; width: 100%; max-width: 320px; }}
-                input[type="password"] {{ width: 90%; padding: 12px; margin: 15px 0; background: #2b2f36; border: 1px solid #474d57; color: white; border-radius: 4px; text-align: center; font-size: 1.1em; }}
-                button {{ background: #f0b90b; color: #0b0e11; border: none; padding: 12px; width: 100%; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 1em; }}
-                h3 {{ color: #f6465d; margin-top: 0; font-size: 1.3em; letter-spacing: 1px; }}
-            </style>
-        </head>
-        <body>
-            <div class="lock-card">
-                <h3>ACCESO RESTRINGIDO</h3>
+        return """<!DOCTYPE html><html><head><title>Watson Lock</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body { font-family: Arial; background: #0b0e11; color: #eaecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; } .lock-card { background: #181a20; padding: 30px; border-radius: 8px; border: 1px solid #2b2f36; text-align: center; } input { padding: 12px; background: #2b2f36; border: 1px solid #474d57; color: white; text-align: center; border-radius: 4px; } button { background: #f0b90b; border: none; padding: 12px; margin-top: 10px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; }</style></head><body><div class="lock-card"><h3 style="color:#f6465d;">ACCESO RESTRINGIDO</h3><form method="POST"><input type="password" name="auth_password" placeholder="Contrasena" required><br><button type="submit">DESBLOQUEAR</button></form></div></body></html>""", 401
+
+    if request.method == 'POST':
+        nuevo_modo = request.form.get("modo_bot")
+        nuevo_leverage = request.form.get("leverage")
+        if nuevo_modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
+            ESTADO_BOT = nuevo_modo
+        if nuevo_leverage:
+            LEVERAGE_MANUAL = int(nuevo_leverage)
+
+    balance_usdt = 89.81
+    try:
+        if binance_client:
+            account = binance_client.futures_account()
+            balance_usdt = float(account.get('availableBalance', 0.0))
+            ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
+            ULTIMO_PRECIO_MONITOREO = float(ticker['price'])
+    except Exception:
+        pass
+
+    opt_x10 = "selected" if LEVERAGE_MANUAL == 10 else ""
+    opt_x20 = "selected" if LEVERAGE_MANUAL == 20 else ""
+
+    # BLINDAJE DE CONCATENACIÓN PLANA: Soluciona el colapso de llaves del CSS con .format()
