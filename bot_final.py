@@ -162,25 +162,18 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# ENLACE ATÓMICO DE CICLO DE VIDA (EJECUTA EN EL PRIMER PING DE RENDER)
+# ENLACE EN EL PRIMER PING LEGÍTIMO DEL PROXY DE RENDER
 # ------------------------------------------------------------------
-def inicializar_bot_completo():
-    # Hack definitivo de pre-carga: Espera 3 segundos a que los sockets del worker se asienten
-    time.sleep(3)
+@app.before_first_request
+def inicializacion_atomica_inicial():
+    # El disparo se procesa de forma síncrona asegurando el canal libre
     enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
-    hilo_bot = threading.Thread(target=ciclo_monitoreo_automatico)
-    hilo_bot.daemon = True
-    hilo_bot.start()
-
-# Forzar ejecucion en la primera transaccion del proxy de Render
-@app.before_request
-def disparar_inicializacion_unica():
-    if not hasattr(app, 'bot_inicializado'):
-        app.bot_inicializado = True
-        threading.Thread(target=inicializar_bot_completo).start()
+    hilo_activo = threading.Thread(target=ciclo_monitoreo_automatico)
+    hilo_activo.daemon = True
+    hilo_activo.start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED DIRECTO)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -189,11 +182,6 @@ def home():
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
-
-@app.route('/test-telegram', methods=['GET'])
-def test_telegram_directo():
-    resultado = "EXITO_PETICION" if enviar_telegram("SISTEMA WATSON: Test manual forzado de conectividad proxy.") else "FALLO_PETICION"
-    return jsonify({"status": "ejecutado", "respuesta": resultado}), 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
@@ -206,3 +194,13 @@ def webhook_receptor():
     client_local = obtener_cliente_binance()
     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL) if client_local else {"price": "0.0"}
     precio_origen = float(ticker.get("price", 0.0))
+    ULTIMO_PRECIO_MONITOREO = precio_origen
+    
+    if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
+        return jsonify({"status": "error", "reason": "Parametros invalidos o API caida"}), 400
+    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
+        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
+        enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
+        return jsonify({"status": "bloqueado", "reason": "Mechazo superado"}), 200
+        
+    resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
