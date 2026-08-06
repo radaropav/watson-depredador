@@ -66,9 +66,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i])      # Índice 2: Precio Máximo
-            low = float(klines[i])       # Índice 3: Precio Mínimo
-            prev_close = float(klines[i-1]) # Índice 4: Precio de Cierre anterior
+            high = float(klines[i][2])      # Índice 2: Precio Máximo
+            low = float(klines[i][3])       # Índice 3: Precio Mínimo
+            prev_close = float(klines[i-1][4]) # Índice 4: Precio de Cierre anterior
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -98,7 +98,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
         # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
-            # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -109,7 +108,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
-            # MOTOR CLÁSICO: Depredador Flash asimétrico por ATR dinámico
             atr = calcular_atr_dinamico_flash(client_local)
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -117,7 +115,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
                 distancia_tp = atr * multiplicador_tp
                 distancia_sl = atr * multiplicador_sl
-                precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
+                precio_tp = round(precio_mercado + Plugins if direccion == "LONG" else precio_mercado - distancia_tp, 2)
                 precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
                 tipo_gestion = "DINAMICA_ATR"
             else:
@@ -144,7 +142,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
-        # REGLA DE ORO MANDATORIA: Concatenación clásica limpia libre de llaves nativas o f-strings
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
@@ -174,16 +171,12 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
-                    
-                    # --- AQUÍ VA TU ESTRATEGIA DE AUTO-GENERACIÓN ---
-                    # El bucle escanea precios e inicializa la operación solo.
-                    
             time.sleep(5)  
         except Exception:
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -198,14 +191,26 @@ def dashboard_secreto():
     global ESTADO_BOT, LEVERAGE_MANUAL
     password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
     
-    if not verificar_credentials(password_ingresado):
+    if not verificar_credenciales(password_ingresado):
         return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
         
     if request.method == 'POST':
-        try:
-            datos = request.get_json(force=True)
-            if "nuevo_modo" in datos:
-                modo = str(datos["nuevo_modo"]).upper()
-                if modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
-                    ESTADO_BOT = modo
-            if "nuevo_leverage" in datos:
+        datos = request.get_json(force=True) or {}
+        modo = str(datos.get("nuevo_modo", "")).upper()
+        if modo == "OFF" or modo == "PREDADOR" or modo == "APLANAMIENTO":
+            ESTADO_BOT = modo
+        if "nuevo_leverage" in datos:
+            LEVERAGE_MANUAL = int(datos.get("nuevo_leverage", 10))
+
+    return jsonify({
+        "status": "success",
+        "activo": SYMBOL,
+        "estado_actual_bot": ESTADO_BOT,
+        "leverage_actual": LEVERAGE_MANUAL,
+        "ultimo_precio_visto": ULTIMO_PRECIO_MONITOREO,
+        "ultimo_atr_calculado": ULTIMO_ATR_MONITOREO,
+        "mechazos_bloqueados": CONTADOR_MECHAZOS
+    }), 200
+
+if __name__ == '__main__':
+    hilo_bot = threading.Thread(target=ciclo_monitoreo_automatico)
