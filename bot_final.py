@@ -54,8 +54,8 @@ def enviar_telegram(mensaje):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
-        # Aumento de timeout a 8 segundos para evitar quiebres por saturación de Render
-        requests.post(url, json=payload, headers=headers, timeout=8, verify=False)
+        # Hack de red: Aumento definitivo a 10 segundos para blindar respuestas lentas en Render Free
+        requests.post(url, json=payload, headers=headers, timeout=10, verify=False)
         return True
     except Exception:
         return False
@@ -172,15 +172,12 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
-                    
-                    # --- AQUÍ AGREGAREMOS LAS CONDICIONES DE ENTRADA DE TU BOT ---
-                    
             time.sleep(5)  
         except Exception:
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -212,3 +209,7 @@ def dashboard_secreto():
         "estado_actual_bot": ESTADO_BOT,
         "leverage_actual": LEVERAGE_MANUAL,
         "ultimo_precio_visto": ULTIMO_PRECIO_MONITOREO,
+        "ultimo_atr_calculado": ULTIMO_ATR_MONITOREO,
+        "mechazos_bloqueados": CONTADOR_MECHAZOS
+    }), 200
+
