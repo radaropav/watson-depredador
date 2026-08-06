@@ -54,7 +54,6 @@ def enviar_telegram(mensaje):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
-        # Hack de red asíncrona: Timeout alto de 12 segundos para evitar cortes en Render plan Free
         requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
         return True
     except Exception:
@@ -94,12 +93,14 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return "Cliente Binance no inicializado"
     try:
         leverage = LEVERAGE_MANUAL
+        
+        if ESTADO_BOT == "OFF":
+            return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
         # ------------------------------------------------------------------
-        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
+        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL (BOT DE EJECUCIÓN)
         # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
-            # BOT DE EJECUCIÓN: Mercado lateral de Asia (Rangos micro comprimidos)
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -110,7 +111,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
-            # BOT DE EJECUCIÓN: Motor clásico por volatilidad ATR asimétrica
             atr = calcular_atr_dinamico_flash(client_local)
             ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
             if atr is not None and atr > 0:
@@ -145,12 +145,12 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
-        # REGLA DE ORO MANDATORIA: Mensajería con concatenación clásica uniendo variables mediante (+ str())
+        # REGLA DE ORO MANDATORIA: Mensajería con concatenación clásica pura uniendo variables mediante (+ str())
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
     except BinanceAPIException as e:
-        enviar_telegram("ERROR BINANCE API " + str(e.message))
+        enviar_telegram("BINANCE_API_ERROR " + str(e.message))
         return e.message
     except Exception as e:
         enviar_telegram("ERROR CRITICO " + str(e))
@@ -167,8 +167,7 @@ def verificar_credenciales(password_plano):
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO
-    # Hack definitivo de acoplamiento de hilos de red en Render Free
-    time.sleep(8)
+    time.sleep(10)
     enviar_telegram("SISTEMA WATSON: Red estable y tunel HTTPS enlazado. Ambos motores inicializados.")
     
     while True:
@@ -178,17 +177,16 @@ def ciclo_monitoreo_automatico():
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
-                    # Registro plano en la memoria caché RAM de Render
                     ULTIMO_PRECIO_MONITOREO = precio_actual
                     
-                    # --- AQUÍ OPERA LA INTERFAZ DE CONDICIONES DE TU ESTRATEGIA FUERTE ---
+                    # --- INTERFAZ NEUTRA DE TU ESTRATEGIA FUERTE ---
                     
             time.sleep(5)  
         except Exception:
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD CRIPTOGRÁFICO PLANO)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED CRIPTOGRÁFICO)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -198,10 +196,19 @@ def home():
 def health_check():
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
-@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
-def dashboard_secreto():
-    global ESTADO_BOT, LEVERAGE_MANUAL
-    password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
+@app.route('/webhook', methods=['POST'])
+def webhook_receptor():
+    global CONTADOR_MECHAZOS
+    datos = request.get_json(force=True) or {}
     
-    if not verificar_credenciales(password_ingresado):
-        return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
+    if "action" not in datos or "price" not in datos:
+        return jsonify({"status": "error", "reason": "Faltan parametros"}), 400
+        
+    direccion = str(datos.get("action")).upper()
+    precio_origen = float(datos.get("price"))
+    fuerza_senal = float(datos.get("fuerza", 0.0))
+    
+    client_local = obtener_cliente_binance()
+    
+    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
+        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
