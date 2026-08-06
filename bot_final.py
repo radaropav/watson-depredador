@@ -100,12 +100,8 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
             # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
-            if direccion == "LONG":
-                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
-            else:
-                precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
+            precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
+            precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
             # MOTOR CLÁSICO: Depredador Flash asimétrico por ATR dinámico
