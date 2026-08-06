@@ -164,7 +164,7 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED DIRECTO)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def home():
@@ -204,4 +204,3 @@ def dashboard_secreto():
     if request.method == 'POST':
         datos = request.get_json(force=True) or {}
         modo = str(datos.get("nuevo_modo", "")).upper()
-        if modo in ["OFF", "PREDADOR", "APLANAMIENTO"]:
