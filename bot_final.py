@@ -36,6 +36,9 @@ ULTIMO_PRECIO_MONITOREO = 0.0
 ULTIMO_ATR_MONITOREO = 0.0    
 CONTADOR_MECHAZOS = 0         
 
+# Variable de control de inicialización aplanada en memoria RAM
+BOT_INICIALIZADO = False
+
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try:
@@ -149,20 +152,20 @@ def ciclo_monitoreo_automatico():
         except Exception: time.sleep(5)
 
 # ------------------------------------------------------------------
-# ENLACE TOTALMENTE HORIZONTAL (BYPASS DE SANGRIAS DE UN SOLO INTENTO)
+# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED HORIZONTAL)
 # ------------------------------------------------------------------
-@app.before_request
-def inicializar_bucle_en_primer_ping():
-    if not hasattr(app, 'bot_inicializado'):
-        app.bot_inicializado = True
-        enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
-        threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
-
 @app.route('/', methods=['GET'])
 def home(): return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/health', methods=['GET'])
-def health_check(): return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
+def health_check():
+    global BOT_INICIALIZADO
+    # HACK DEFINITIVO DE ARRANCADOR: Detona el bot de forma sincrona en la ruta de salud de Render
+    if not BOT_INICIALIZADO:
+        BOT_INICIALIZADO = True
+        enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
+        threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
+    return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
@@ -188,6 +191,3 @@ def dashboard_secreto():
     global ESTADO_BOT, LEVERAGE_MANUAL
     password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
     if not verificar_credenciales(password_ingresado): return jsonify({"status": "error", "reason": "Auth invalida"}), 401
-    
-    if request.method == 'POST':
-        datos = request.get_json(force=True) or {}
