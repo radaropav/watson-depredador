@@ -66,9 +66,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i])      # Índice 2: Precio Máximo
-            low = float(klines[i])       # Índice 3: Precio Mínimo
-            prev_close = float(klines[i-1]) # Índice 4: Precio de Cierre anterior
+            high = float(klines[i][2])      # Índice 2: Precio Máximo
+            low = float(klines[i][3])       # Índice 3: Precio Mínimo
+            prev_close = float(klines[i-1][4]) # Índice 4: Precio de Cierre anterior
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -119,12 +119,13 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
                 distancia_sl = atr * multiplicador_sl
                 precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
                 precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
+                tipo_gestion = "DINAMICA_ATR"
             else:
                 tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
                 sl_porcentaje = 0.0030 if fuerza_senal >= 0.0040 else 0.0015
                 precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
                 precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
-            tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
+                tipo_gestion = "FIJA_EMERGENCIA"
 
         client_local.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = client_local.futures_account()
@@ -208,4 +209,3 @@ def dashboard_secreto():
         except Exception:
             pass
 
-    return jsonify({
