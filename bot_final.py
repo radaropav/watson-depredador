@@ -198,7 +198,7 @@ def dashboard_secreto():
     global ESTADO_BOT, LEVERAGE_MANUAL
     password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
     
-    if not verificar_credenciales(password_ingresado):
+    if not verificar_credentials(password_ingresado):
         return jsonify({"status": "error", "reason": "Acceso denegado. Auth invalida."}), 401
         
     if request.method == 'POST':
