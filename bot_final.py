@@ -1,6 +1,7 @@
 import os
 import time
 import requests
+import hashlib
 from flask import Flask, request, jsonify
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -9,6 +10,7 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -20,6 +22,16 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
+# CONFIGURACIÓN DE SEGURIDAD CRIPTOGRÁFICA (Clave por defecto: admin123)
+PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
+
+# VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
+ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
+LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
+ULTIMO_PRECIO_MONITOREO = 0.0 
+ULTIMO_ATR_MONITOREO = 0.0    
+CONTADOR_MECHAZOS = 0         
+
 binance_client = None
 if BINANCE_API_KEY and BINANCE_SECRET_KEY:
     try:
@@ -30,7 +42,7 @@ if BINANCE_API_KEY and BINANCE_SECRET_KEY:
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
-    # BYPASS DE ÉLITE: Fragmentación absoluta para romper la inspección regional de red
+    # BYPASS DE RED REGIONAL: Fragmentación absoluta para romper inspección de paquetes
     p = "https://"
     s = "api."
     r = "telegram"
@@ -47,14 +59,12 @@ def enviar_telegram(mensaje):
         return False
 
 def calcular_atr_dinamico_flash(periodos=14):
-    """MÓDULO FLASH DE ALTA PRECISIÓN: Extracción síncrona sin fallas de memoria."""
     try:
         if not binance_client:
             return None
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            # CORRECCIÓN DE ÍNDICES: Extracción limpia de los elementos flotantes numéricos
             high = float(klines[i][2])
             low = float(klines[i][3])
             prev_close = float(klines[i-1][4])
@@ -77,47 +87,65 @@ def evaluar_filtro_anti_mechazo_directo(precio_origen):
         return False
 
 def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
+    global ULTIMO_ATR_MONITOREO
     if not binance_client:
         return "Cliente Binance no inicializado"
     try:
-        if fuerza_senal >= 0.0040:
-            leverage = 20
-            multiplicador_tp = 2.0  
-            multiplicador_sl = 1.2  
-        else:
-            leverage = 10
-            multiplicador_tp = 1.5  
-            multiplicador_sl = 1.0  
+        leverage = LEVERAGE_MANUAL
 
-        atr = calcular_atr_dinamico_flash()
-        if atr is not None and atr > 0:
-            distancia_tp = atr * multiplicador_tp
-            distancia_sl = atr * multiplicador_sl
-            if direccion == "LONG":
-                precio_tp = round(precio_mercado + distancia_tp, 2)
-                precio_sl = round(precio_mercado - distancia_sl, 2)
-            else:
-                precio_tp = round(precio_mercado - distancia_tp, 2)
-                precio_sl = round(precio_mercado + distancia_sl, 2)
-        else:
-            tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
-            sl_porcentaje = 0.0030 if fuerza_senal >= 0.0040 else 0.0015
+        # ------------------------------------------------------------------
+        # INNOVACIÓN: CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
+        # ------------------------------------------------------------------
+        if ESTADO_BOT == "APLANAMIENTO":
+            # MOTOR NUEVO: Diseñado para explotar la compresión de las medias móviles en rangos laterales
+            # Cerramos con micro-salidas fijas y cortas del 0.25% para asegurar ganancias antes de que el rango rompa
+            tp_porcentaje = 0.0025
+            sl_porcentaje = 0.0018
+            
             if direccion == "LONG":
                 precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
                 precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
             else:
                 precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
                 precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
+                
+            tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
+        else:
+            # MOTOR CLÁSICO: Depredador Flash de rupturas y tendencias asimétricas por ATR
+            atr = calcular_atr_dinamico_flash()
+            ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
+            
+            if atr is not None and atr > 0:
+                multiplicador_tp = 2.0 if fuerza_senal >= 0.0040 else 1.5
+                multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
+                distancia_tp = atr * multiplicador_tp
+                distancia_sl = atr * multiplicador_sl
+                
+                if direccion == "LONG":
+                    precio_tp = round(precio_mercado + distancia_tp, 2)
+                    precio_sl = round(precio_mercado - distancia_sl, 2)
+                else:
+                    precio_tp = round(precio_mercado - distancia_tp, 2)
+                    precio_sl = round(precio_mercado + distancia_sl, 2)
+            else:
+                tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
+                sl_porcentaje = 0.0030 if fuerza_senal >= 0.0040 else 0.0015
+                
+                if direccion == "LONG":
+                    precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
+                    precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
+                else:
+                    precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
+                    precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
+                    
+            tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
 
         binance_client.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = binance_client.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
         
-        if balance_disponible > 400.0:
-            capital_operativo = balance_disponible * 0.25  
-        else:
-            capital_operativo = balance_disponible * 0.10  
-        
+        # Contraseguro institucional estricto sobre tus $89.81 USDT
+        capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
         cantidad_nocional = (capital_operativo * leverage) / precio_mercado
         quantity = round(cantidad_nocional, 3) 
         if quantity <= 0:
@@ -126,32 +154,14 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
 
-        binance_client.futures_create_order(
-            symbol=SYMBOL, 
-            side=side_entrada, 
-            type=Client.FUTURE_ORDER_TYPE_MARKET, 
-            quantity=quantity
-        )
-
-        # CORRECCIÓN DE ÉLITE: Parámetros booleanos nativos correctos y valores numéricos redondeados exigidos por la API
-        binance_client.futures_create_order(
-            symbol=SYMBOL, 
-            side=side_salida, 
-            type='TAKE_PROFIT_MARKET', 
-            stopPrice=precio_tp, 
-            closePosition=True
-        )
+        # 1. ORDEN PRINCIPAL A MERCADO
+        binance_client.futures_create_order(symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
         
-        binance_client.futures_create_order(
-            symbol=SYMBOL, 
-            side=side_salida, 
-            type='STOP_MARKET', 
-            stopPrice=precio_sl, 
-            closePosition=True
-        )
+        # 2. SEGUROS DE CIERRE AUTOMÁTICOS (Corrección: Booleanos nativos sin comisiones duplicadas)
+        binance_client.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
+        binance_client.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
-        tipo_gestion = "DINAMICA_ATR" if atr is not None else "FIJA_EMERGENCIA"
-        msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
+        msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
     except BinanceAPIException as e:
@@ -161,39 +171,33 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    data = request.get_json() or {}
-    direccion = data.get("direccion")  
-    fuerza = float(data.get("variacion", 0.0))  
-    if direccion not in ["LONG", "SHORT"]:
-        return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
-    try:
-        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
-        precio_actual = float(ticker['price'])
-    except Exception:
-        return jsonify({"status": "error", "reason": "No se pudo precio base"}), 500
+def verificar_credenciales(password_plano):
+    if not password_plano:
+        return False
+    hash_ingresado = hashlib.sha256(password_plano.encode('utf-8')).hexdigest()
+    return hash_ingresado == PASSWORD_HASH_SECRETO
 
-    if not evaluar_filtro_anti_mechazo_directo(precio_actual):
-        msg_cancelado = "==================================\n       DISPARO CANCELADO          \n==================================\n• MOTIVO: MECHAZO DETECTADO EN ETH\n=================================="
-        enviar_telegram(msg_cancelado)
-        return jsonify({"status": "cancelado", "reason": "Filtro anti-mechazos activado"}), 200
-
-    resultado = ejecutar_caza_asimetrica(direccion, precio_actual, fuerza)
-    return jsonify({"status": "processed", "resultado": resultado}), 200
-
-@app.route('/', methods=['GET', 'HEAD'])
-def index():
-    return jsonify({"status": "live", "service": "webhook_active"}), 200
-
-@app.route('/health', methods=['GET'])
-def health():
-    # RECONSTRUCCIÓN COMPLETA DE LA INTERFAZ DE DIAGNÓSTICO INSTITUCIONAL
-    msg_health = "==================================\n   RADAR DIÁGNOSTICO WATSON V4    \n==================================\n• STATUS MOTOR: ONLINE (READY)\n• RENDIMIENTO : EXTRA FLASH HTTP\n• CONCURRENCIA : BLINDADA MULTI-THREAD\n• ENTORNO     : BYPASS COMPATIBLE\n=================================="
-    enviar_telegram(msg_health)
-    return jsonify({"status": "online", "motor": "Watson Webhook Ready"}), 200
-
-if __name__ == '__main__':
-    cadena_puerto = os.environ.get("PORT", "10000")
-    puerto_numerico = int(cadena_puerto)
-    app.run(host='0.0.0.0', port=puerto_numerico)
+@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
+def dashboard_secreto():
+    global ESTADO_BOT, LEVERAGE_MANUAL, ULTIMO_PRECIO_MONITOREO
+    
+    password_ingresado = request.args.get('auth') or request.form.get('auth_password')
+    
+    if not verificar_credenciales(password_ingresado):
+        html_bloqueo = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Watson Security Lock</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body {{ font-family: Arial, sans-serif; background: #0b0e11; color: #eaecef; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+                .lock-card {{ background: #181a20; padding: 30px; border-radius: 8px; border: 1px solid #2b2f36; text-align: center; width: 100%; max-width: 320px; }}
+                input[type="password"] {{ width: 90%; padding: 12px; margin: 15px 0; background: #2b2f36; border: 1px solid #474d57; color: white; border-radius: 4px; text-align: center; font-size: 1.1em; }}
+                button {{ background: #f0b90b; color: #0b0e11; border: none; padding: 12px; width: 100%; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 1em; }}
+                h3 {{ color: #f6465d; margin-top: 0; font-size: 1.3em; letter-spacing: 1px; }}
+            </style>
+        </head>
+        <body>
+            <div class="lock-card">
+                <h3>ACCESO RESTRINGIDO</h3>
