@@ -54,7 +54,6 @@ def enviar_telegram(mensaje):
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
-        # Hack de red: Aumento definitivo a 10 segundos para blindar respuestas lentas en Render Free
         requests.post(url, json=payload, headers=headers, timeout=10, verify=False)
         return True
     except Exception:
@@ -164,6 +163,10 @@ def verificar_credenciales(password_plano):
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO
+    # SOLUCIÓN HACK DE RED: Retardo asíncrono controlado de 5 segundos antes de inyectar alertas de red
+    time.sleep(5)
+    enviar_telegram("SISTEMA WATSON: Instancia y sockets acoplados con exito en Render. Modo Auto listo.")
+    
     while True:
         try:
             if ESTADO_BOT != "OFF":
@@ -208,8 +211,3 @@ def dashboard_secreto():
         "activo": SYMBOL,
         "estado_actual_bot": ESTADO_BOT,
         "leverage_actual": LEVERAGE_MANUAL,
-        "ultimo_precio_visto": ULTIMO_PRECIO_MONITOREO,
-        "ultimo_atr_calculado": ULTIMO_ATR_MONITOREO,
-        "mechazos_bloqueados": CONTADOR_MECHAZOS
-    }), 200
-
