@@ -45,8 +45,7 @@ def obtener_cliente_binance():
     return None
 
 def enviar_telegram(mensaje):
-    if not TELEGRAM_TOKEN or not URL_TELEGRAM:
-        return False
+    if not TELEGRAM_TOKEN or not URL_TELEGRAM: return False
     url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
@@ -57,8 +56,7 @@ def enviar_telegram(mensaje):
         return False
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
-    if not client_local:
-        return None
+    if not client_local: return None
     try:
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
@@ -69,29 +67,24 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
-    except Exception:
-        return None
+    except Exception: return None
 
 def evaluar_filtro_anti_mechazo_direct(client_local, precio_origen):
     time.sleep(3)
-    if not client_local:
-        return False
+    if not client_local: return False
     try:
         ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
         precio_actual = float(ticker['price'])
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
         return variacion_micro <= FILTRO_MECHAZO_MAX
-    except Exception:
-        return False
+    except Exception: return False
 
 def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_senal):
     global ULTIMO_ATR_MONITOREO
-    if not client_local:
-        return "Cliente Binance no inicializado"
+    if not client_local: return "Cliente Binance no inicializado"
     try:
         leverage = 20 if fuerza_senal >= 0.0040 else 10
-        if ESTADO_BOT == "OFF":
-            return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
+        if ESTADO_BOT == "OFF": return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
         if ESTADO_BOT == "APLANAMIENTO":
             tp_porcentaje = 0.0025
@@ -120,8 +113,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         balance_disponible = float(account.get('availableBalance', 0))
         capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
         quantity = round((capital_operativo * leverage) / precio_mercado, 3)
-        if quantity <= 0:
-            return "Capital insuficiente"
+        if quantity <= 0: return "Capital insuficiente"
 
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
@@ -141,13 +133,9 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return str(e)
 
 def verificar_credenciales(password_plano):
-    if not password_plano:
-        return False
+    if not password_plano: return False
     return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
 
-# ------------------------------------------------------------------
-# MOTOR DE AUTO-GENERACIÓN DE SEÑALES (BOT FUERTE ANALÍTICO)
-# ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO
     while True:
@@ -158,35 +146,23 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     ULTIMO_PRECIO_MONITOREO = float(ticker['price'])
             time.sleep(5)
-        except Exception:
-            time.sleep(5)
+        except Exception: time.sleep(5)
 
 # ------------------------------------------------------------------
-# ENLACE PERSISTENTE NATIVO INTEGRADO (BYPASS DE PRELOAD DE GUNICORN)
+# ENLACE TOTALMENTE HORIZONTAL (BYPASS DE SANGRIAS DE UN SOLO INTENTO)
 # ------------------------------------------------------------------
-def inicializar_bot_completo():
-    time.sleep(5)
-    enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
-    hilo_bot = threading.Thread(target=ciclo_monitoreo_automatico)
-    hilo_bot.daemon = True
-    hilo_bot.start()
-
 @app.before_request
-def disparar_inicializacion_unica():
+def inicializar_bucle_en_primer_ping():
     if not hasattr(app, 'bot_inicializado'):
         app.bot_inicializado = True
-        threading.Thread(target=inicializar_bot_completo).start()
+        enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
+        threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
-# ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB Y DASHBOARD FLATTENED HORIZONTAL)
-# ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
-def home():
-    return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
+def home(): return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
+def health_check(): return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
@@ -204,3 +180,14 @@ def webhook_receptor():
         CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
         enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
         return jsonify({"status": "bloqueado", "reason": "Mechazo detectado"}), 200
+    resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
+    return jsonify({"status": "procesado", "resultado": resultado}), 200
+
+@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
+def dashboard_secreto():
+    global ESTADO_BOT, LEVERAGE_MANUAL
+    password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
+    if not verificar_credenciales(password_ingresado): return jsonify({"status": "error", "reason": "Auth invalida"}), 401
+    
+    if request.method == 'POST':
+        datos = request.get_json(force=True) or {}
