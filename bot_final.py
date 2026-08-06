@@ -10,28 +10,23 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
-# HACK DE INFRAESTRUCTURA: Enlazamos el puerto dinámico de Render a nivel global
+# CONFIGURACIÓN NATIVA DE RED PARA EL PUERTO DINÁMICO DE RENDER
 PUERTO_RENDER = int(os.environ.get("PORT", 10000))
-app.config['SERVER_NAME'] = None
 
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
-# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
-# CONFIGURACIÓN DE SEGURIDAD CRIPTOGRÁFICA (Clave por defecto: admin123)
 PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
 
-# VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
-ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
-LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
+ESTADO_BOT = "PREDADOR"       
+LEVERAGE_MANUAL = 10          
 ULTIMO_PRECIO_MONITOREO = 0.0 
 ULTIMO_ATR_MONITOREO = 0.0    
 CONTADOR_MECHAZOS = 0         
@@ -52,7 +47,6 @@ def enviar_telegram(mensaje):
     t = ".org"
     m = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     url = p + s + r + t + m
-    
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
@@ -62,15 +56,15 @@ def enviar_telegram(mensaje):
         return False
 
 def calcular_atr_dinamico_flash(periodos=14):
+    if not binance_client:
+        return None
     try:
-        if not binance_client:
-            return None
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
+            high = float(klines[i])
+            low = float(klines[i])
+            prev_close = float(klines[i-1])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -79,9 +73,9 @@ def calcular_atr_dinamico_flash(periodos=14):
 
 def evaluar_filtro_anti_mechazo_directo(precio_origen):
     time.sleep(3)
+    if not binance_client:
+        return False
     try:
-        if not binance_client:
-            return False
         ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
         precio_actual = float(ticker['price'])
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
@@ -96,18 +90,11 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
     try:
         leverage = LEVERAGE_MANUAL
 
-        # ------------------------------------------------------------------
-        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
-        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
-            if direccion == "LONG":
-                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
-            else:
-                precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
+            precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
+            precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
             atr = calcular_atr_dinamico_flash()
@@ -117,7 +104,6 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
                 multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
                 distancia_tp = atr * multiplicador_tp
                 distancia_sl = atr * multiplicador_sl
-                # CORRECCIÓN DEFINITIVA: Purgada la palabra parásita del cálculo matemático
                 precio_tp = round(precio_mercado + distancia_tp, 2) if direccion == "LONG" else round(precio_mercado - distancia_tp, 2)
                 precio_sl = round(precio_mercado - distancia_sl, 2) if direccion == "LONG" else round(precio_mercado + distancia_sl, 2)
             else:
@@ -179,14 +165,14 @@ def dashboard_secreto():
 
     balance_usdt = 89.81
     global ULTIMO_PRECIO_MONITOREO
-    try:
-        if binance_client:
+    if binance_client:
+        try:
             account = binance_client.futures_account()
             balance_usdt = float(account.get('availableBalance', 0.0))
             ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
             ULTIMO_PRECIO_MONITOREO = float(ticker['price'])
-    except Exception:
-        pass
+        except Exception:
+            pass
 
     return jsonify({
         "SISTEMA": "WATSON CONTROL CENTER",
@@ -208,7 +194,21 @@ def webhook():
     direccion = data.get("direccion")  
     fuerza = float(data.get("variacion", 0.0))  
     
-    if direccion not in ["LONG", "SHORT"]: return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
+    if direccion not in ["LONG", "SHORT"]: 
+        return jsonify({"status": "error", "reason": "Direccion invalida"}), 400
         
-    try:
-        ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
+    if not binance_client:
+        return jsonify({"status": "error", "reason": "Cliente Binance no inicializado"}), 500
+
+    # HACK DE ELIMINACIÓN DE TRY/EXCEPT: Consulta síncrona en línea inmune a desajustes
+    ticker = binance_client.futures_symbol_ticker(symbol=SYMBOL)
+    precio_actual = float(ticker['price'])
+    ULTIMO_PRECIO_MONITOREO = precio_actual
+
+    if not evaluar_filtro_anti_mechazo_directo(precio_actual):
+        CONTADOR_MECHAZOS += 1
+        msg_cancelado = "==================================\n       DISPARO CANCELADO          \n==================================\n• MOTIVO: MECHAZO DETECTADO EN ETH\n=================================="
+        enviar_telegram(msg_cancelado)
+        return jsonify({"status": "cancelado", "reason": "Filtro anti-mechazos activado"}), 200
+
+    resultado = ejecutar_caza_asimetrica(direccion, precio_actual, fuerza)
