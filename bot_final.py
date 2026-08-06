@@ -65,9 +65,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
+            high = float(klines[i])
+            low = float(klines[i])
+            prev_close = float(klines[i-1])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -100,8 +100,12 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
             # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
-            precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
-            precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
+            if direccion == "LONG":
+                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2)
+                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2)
+            else:
+                precio_tp = round(precio_mercado * (1 - tp_porcentaje), 2)
+                precio_sl = round(precio_mercado * (1 + sl_porcentaje), 2)
             tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
         else:
             # MOTOR CLÁSICO: Depredador Flash asimétrico por ATR dinámico
