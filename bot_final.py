@@ -10,11 +10,11 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Inicialización nativa pura con guiones dobles para Flask
 app = Flask(__name__)
 
-# CONFIGURACIÓN NATIVA DE RED PARA EL PUERTO DINÁMICO DE RENDER
+# ASIGNACIONES EN PYTHON PURO (Sin palabras claves inválidas 'const')
 PUERTO_RENDER = int(os.environ.get("PORT", 10000))
-
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
@@ -25,7 +25,7 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
 
-# VARIABLES GLOBALES DINÁMICAS (En memoria RAM de Render)
+# VARIABLES GLOBALES DINÁMICAS ( RAM RENDER )
 ESTADO_BOT = "PREDADOR"       
 LEVERAGE_MANUAL = 10          
 ULTIMO_PRECIO_MONITOREO = 0.0 
@@ -33,7 +33,6 @@ ULTIMO_ATR_MONITOREO = 0.0
 CONTADOR_MECHAZOS = 0         
 
 def obtener_cliente_binance():
-    """HACK: Inicialización dinámica bajo demanda para evitar congelamiento de Gunicorn en frío."""
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try:
             return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -65,9 +64,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
+            high = float(klines[i])
+            low = float(klines[i])
+            prev_close = float(klines[i-1])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -204,12 +203,11 @@ def webhook():
     if not client_local:
         return jsonify({"status": "error", "reason": "No se pudo inicializar cliente de Binance"}), 500
 
-    try:
-        ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-        precio_actual = float(ticker['price'])
-        ULTIMO_PRECIO_MONITOREO = precio_actual
-    except Exception:
-        return jsonify({"status": "error", "reason": "Fallo de conexion síncrona con Binance"}), 500
+    ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
+    precio_actual = float(ticker['price'])
+    ULTIMO_PRECIO_MONITOREO = precio_actual
 
     if not evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
         CONTADOR_MECHAZOS += 1
+        msg_cancelado = "==================================\n       DISPARO CANCELADO          \n==================================\n• MOTIVO: MECHAZO DETECTADO EN ETH\n=================================="
+        enviar_telegram(msg_cancelado)
