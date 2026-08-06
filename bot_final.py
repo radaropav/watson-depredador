@@ -10,22 +10,23 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización con anulación estricta de restricciones de nombre de host
+# Inicialización limpia nativa con guiones dobles para Flask
 app = Flask(__name__)
-app.config['SERVER_NAME'] = None
 
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
+# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
 
-ESTADO_BOT = "PREDADOR"       
-LEVERAGE_MANUAL = 10          
+# VARIABLES GLOBALES DINÁMICAS (En memoria RAM de Render)
+ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
+LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
 ULTIMO_PRECIO_MONITOREO = 0.0 
 ULTIMO_ATR_MONITOREO = 0.0    
 CONTADOR_MECHAZOS = 0         
@@ -41,12 +42,14 @@ def obtener_cliente_binance():
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN:
         return False
+    # REGLA DE ORO MANDATORIA: Bypass regional fragmentado por variables individuales
     p = "https://"
     s = "api."
     r = "telegram"
     t = ".org"
     m = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     url = p + s + r + t + m
+    
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
@@ -90,6 +93,9 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
     try:
         leverage = LEVERAGE_MANUAL
 
+        # ------------------------------------------------------------------
+        # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
+        # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
@@ -126,10 +132,12 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
         side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
 
-        client_local.futures_create_order(symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
-        client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
-        client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
+        binance_client_orders = client_local
+        binance_client_orders.futures_create_order(symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
+        binance_client_orders.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
+        binance_client_orders.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
 
+        # REGLA DE ORO MANDATORIA: Concatenación clásica limpia libre de llaves nativas o f-strings
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
         return "Exito"
@@ -202,13 +210,3 @@ def webhook():
         return jsonify({"status": "error", "reason": "No se pudo inicializar cliente de Binance"}), 500
 
     try:
-        ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-        precio_actual = float(ticker['price'])
-        ULTIMO_PRECIO_MONITOREO = precio_actual
-    except Exception:
-        return jsonify({"status": "error", "reason": "Fallo de conexion síncrona con Binance"}), 500
-
-    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-        CONTADOR_MECHAZOS += 1
-        msg_cancelado = "==================================\n       DISPARO CANCELADO          \n==================================\n• MOTIVO: MECHAZO DETECTADO EN ETH\n=================================="
-        enviar_telegram(msg_cancelado)
