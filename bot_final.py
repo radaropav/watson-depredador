@@ -13,6 +13,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Inicialización nativa con guiones dobles para el mapa de rutas de Flask
 app = Flask(__name__)
 
+# HACK DE INFRAESTRUCTURA: Enlazamos el puerto dinámico de Render a nivel global
+PUERTO_RENDER = int(os.environ.get("PORT", 10000))
+app.config['SERVER_NAME'] = None  # Desactiva restricciones estrictas de nombre de servidor
+
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
@@ -65,9 +69,9 @@ def calcular_atr_dinamico_flash(periodos=14):
         klines = binance_client.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
+            high = float(klines[i])
+            low = float(klines[i])
+            prev_close = float(klines[i-1])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -97,7 +101,7 @@ def ejecutar_caza_asimetrica(direccion, precio_mercado, fuerza_senal):
         # CONMUTADOR DE MOTORES ALGORÍTMICOS EN TIEMPO REAL
         # ------------------------------------------------------------------
         if ESTADO_BOT == "APLANAMIENTO":
-            # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral
+            # MOTOR NUEVO: Micro-salidas fijas cortas para la consolidación lateral de Asia
             tp_porcentaje = 0.0025
             sl_porcentaje = 0.0018
             if direccion == "LONG":
@@ -160,7 +164,7 @@ def verificar_credenciales(password_plano):
 
 @app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
 def dashboard_secreto():
-    """HACK DE RESPUESTA DIRECTA: Control total e intercambio de modos vía API JSON pura."""
+    """CONTROL VIA JSON: Intercambio de modos dinámicos en caliente desde el teléfono."""
     global ESTADO_BOT, LEVERAGE_MANUAL
     
     password_ingresado = request.args.get('auth') or request.headers.get('Authorization')
@@ -207,7 +211,3 @@ def webhook():
         return jsonify({"status": "paused", "reason": "La ejecucion del bot se encuentra congelada desde el Dashboard"}), 200
         
     data = request.get_json() or {}
-    direccion = data.get("direccion")  
-    fuerza = float(data.get("variacion", 0.0))  
-    
-    if direccion not in ["LONG", "SHORT"]:
