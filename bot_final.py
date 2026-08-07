@@ -18,7 +18,7 @@ SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
-# EXTRACCIÓN SEGURA DE CREDENCIALES Y PROXYS DESDE EL ENTORNO DE RENDER
+# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
@@ -47,7 +47,7 @@ def obtener_cliente_binance():
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN: return False
-    # CONSTRUCTOR NATIVO FRAGMENTADO RESPALDADO POR TU HISTORIAL
+    # CONSTRUCTOR NATIVO RESPALDADO POR TU COMPORTAMIENTO DE ÉXITO HISTÓRICO
     protocolo = "https://"
     sub = "api."
     raiz = "telegram"
@@ -167,33 +167,40 @@ def ejecutar_arranque_atomico_secreto():
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                # FLUJO SÍNCRONO SEGURO: El mensaje sale forzado por el hilo maestro
-                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Proyecto iniciado desde 0.")
+                # DISPARO SÍNCRONO DEFINITIVO DESDE EL HILO MAESTRO
+                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Obra maestra online.")
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB CON ASIGNACIÓN DE RUTAS CORREGIDAS)
+# VÍAS DE ENTRADA (MÉTODOS WEB SECTORIZADOS EN LA RAÍZ PRINCIPAL)
 # ------------------------------------------------------------------
-@app.route('/', methods=['GET'])
-def ruta_raiz():
-    return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
+@app.route('/', methods=['GET', 'POST'])
+def ruta_raiz_maestra_unificada():
+    global ESTADO_BOT, LEVERAGE_MANUAL
+    # Detona la red en el acto al cargar el unico endpoint obligatorio
+    ejecutar_arranque_atomico_secreto()
+    
+    if request.method == 'POST':
+        datos = request.get_json(force=True) or {}
+        modo = str(datos.get("nuevo_modo", "")).upper()
+        ESTADO_BOT = modo if modo in ["OFF", "PREDADOR", "APLANAMIENTO"] else ESTADO_BOT
+        LEVERAGE_MANUAL = int(datos.get("nuevo_leverage")) if "nuevo_leverage" in datos else LEVERAGE_MANUAL
+
+    return jsonify({
+        "status": "success",
+        "activo": SYMBOL,
+        "estado_actual_bot": ESTADO_BOT,
+        "leverage_actual": LEVERAGE_MANUAL,
+        "ultimo_precio_visto": ULTIMO_PRECIO_MONITOREO,
+        "ultimo_atr_calculado": ULTIMO_ATR_MONITOREO,
+        "mechazos_bloqueados": CONTADOR_MECHAZOS
+    }), 200
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
+    return jsonify({"status": "healthy"}), 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook_receptor():
     global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
     datos = request.get_json(force=True) or {}
-    direccion = str(datos.get("direccion", "")).upper()
-    fuerza_senal = float(datos.get("variacion", 0.0))
-    client_local = obtener_cliente_binance()
-    ticker = client_local.futures_symbol_ticker(symbol=SYMBOL) if client_local else {"price": "0.0"}
-    precio_origen = float(ticker.get("price", 0.0))
-    ULTIMO_PRECIO_MONITOREO = precio_origen
-    if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
-        return jsonify({"status": "error", "reason": "Parametros invalidos"}), 400
-    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
-        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
-        enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
