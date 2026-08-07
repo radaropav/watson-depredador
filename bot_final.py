@@ -180,10 +180,10 @@ hilo_global.daemon = True
 hilo_global.start()
 
 # ------------------------------------------------------------------
-# ENDPOINT ÚNICO CENTRALIZADO (EVITA FALLAS DE ENRUTAMIENTO WSGI)
+# ENDPOINTS CENTRALES SEPARADOS (ELIMINA EL ERROR DE RESPUESTA)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD'])
-def mostrar_dashboard_centralizado():
+def mostrar_dashboard_raiz():
     if request.method == 'HEAD': return jsonify({"status": "healthy"}), 200
     
     color_modo = "#ff9100"
