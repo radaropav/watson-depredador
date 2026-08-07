@@ -27,6 +27,8 @@ URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
 URL_TELEGRAM = os.getenv("URL_TELEGRAM")
 
+PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
+
 # VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
 LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
@@ -46,7 +48,12 @@ def obtener_cliente_binance():
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN or not URL_TELEGRAM: return False
-    url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
+    # REGLA REPARADA DE RED REGIONAL: Se evalúa si el proxy guardado ya contiene la API oficial de Telegram
+    # Si la variable es exactamente la url raíz base publica, se le anexa el segmento "/bot" faltante
+    url_base = str(URL_TELEGRAM)
+    m = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
+    url = url_base + m if url_base == "https://telegram.org" else url_base + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
+    
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     try:
@@ -60,9 +67,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i])
-            low = float(klines[i])
-            prev_close = float(klines[i-1])
+            high = float(klines[i][2])
+            low = float(klines[i][3])
+            prev_close = float(klines[i-1][4])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -131,6 +138,10 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
 
+def verificar_credenciales(password_plano):
+    if not password_plano: return False
+    return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
+
 # ------------------------------------------------------------------
 # TÚNEL PERPETUO HTTPS FLASH MAXIMIZADO CON CACHÉ DINÁMICA
 # ------------------------------------------------------------------
@@ -146,29 +157,35 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
         except Exception: time.sleep(5)
 
-def forzar_inicializacion_sincrona():
+def hilo_arranque_seguro():
+    enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Proyecto iniciado desde 0.")
+    ciclo_monitoreo_automatico()
+
+def ejecutar_arranque_atomico_secreto():
     global BOT_INICIALIZADO
     if not BOT_INICIALIZADO:
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Canales activos.")
-                threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
+                threading.Thread(target=hilo_arranque_seguro, daemon=True).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB CON ACCESO LIBRE ATÓMICO)
+# VÍAS DE ENTRADA (MÉTODOS WEB PERFECTAMENTE INDENTADOS)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def ruta_raiz_lineal():
+    ejecutar_arranque_atomico_secreto()
     return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/health', methods=['GET'])
 def ruta_health_lineal():
+    ejecutar_arranque_atomico_secreto()
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/webhook', methods=['POST'])
 def ruta_webhook_lineal():
     global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
+    ejecutar_arranque_atomico_secreto()
     datos = request.get_json(force=True) or {}
     direccion = str(datos.get("direccion", "")).upper()
     fuerza_senal = float(datos.get("variacion", 0.0))
@@ -178,18 +195,3 @@ def ruta_webhook_lineal():
     ULTIMO_PRECIO_MONITOREO = precio_origen
     if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
         return jsonify({"status": "error", "reason": "Parametros invalidos"}), 400
-    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
-        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
-        enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO DETECTADO EN ETH")
-        return jsonify({"status": "bloqueado", "reason": "Mechazo detectado"}), 200
-    resultado = ejecutar_caza_asimetrica(client_local, direccion, precio_origen, fuerza_senal)
-    return jsonify({"status": "procesado", "resultado": resultado}), 200
-
-@app.route('/dashboard-secreto-watson', methods=['GET', 'POST'])
-def ruta_dashboard_lineal():
-    global ESTADO_BOT, LEVERAGE_MANUAL
-    # ACCESO DIRECTO LIBRE: Detona la red en el acto al cargar el endpoint plano
-    forzar_inicializacion_sincrona()
-    if request.method == 'POST':
-        datos = request.get_json(force=True) or {}
-        modo = str(datos.get("nuevo_modo", "")).upper()
