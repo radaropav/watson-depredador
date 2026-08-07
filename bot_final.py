@@ -142,7 +142,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
-    time.sleep(12)  # BYPASS: Retraso forzado lineal para que Gunicorn termine de abrir el puerto web en paz
+    time.sleep(12)  # BYPASS: Retraso forzado para que Gunicorn termine de levantar la interfaz web en la RAM
     while True:
         try:
             if ESTADO_BOT != "OFF":
@@ -181,7 +181,7 @@ hilo_global.daemon = True
 hilo_global.start()
 
 # ------------------------------------------------------------------
-# MASTER INTERACTIVE DASHBOARD CON RESPUESTA VALIDA HTTP DE UNA LINEA
+# MASTER INTERACTIVE DASHBOARD CON RETORNO OBLIGATORIO DE RESPUESTA
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD', 'POST'])
 def master_bypass_raiz():
