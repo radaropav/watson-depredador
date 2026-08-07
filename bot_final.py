@@ -143,7 +143,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return str(e)
 
 # ------------------------------------------------------------------
-# MOTOR DE TRADING AUTÓNOMO (ALGORITMO 3 VELAS)
+# MOTOR DE TRADING AUTÓNOMO (ALGORITMO VELAS EN SEGUNDO PLANO)
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
@@ -189,6 +189,6 @@ def ejecutar_arranque_atomico_secreto():
                 BOT_INICIALIZADO = True
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
-# GATILLO PASIVO INTELIGENTE: Detona el hilo de Binance de forma segura después de que Flask ya cargó las rutas
+# GATILLO PASIVO INTELIGENTE: Sincronización matemática estricta con sangrado de 4 espacios corregido
 @app.before_request
 def disparador_pasivo_infraestructura():
