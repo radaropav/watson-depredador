@@ -143,7 +143,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return str(e)
 
 # ------------------------------------------------------------------
-# MOTOR DE TRADING AUTÓNOMO E INYECTOR HISTÓRICO Continúo
+# MOTOR DE TRADING AUTÓNOMO E INYECTOR HISTÓRICO
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
