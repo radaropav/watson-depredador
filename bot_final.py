@@ -25,6 +25,7 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
+URL_TELEGRAM = os.getenv("URL_TELEGRAM")
 
 # VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
@@ -54,6 +55,7 @@ def enviar_telegram(mensaje):
     tld = ".org"
     ruta_metodo = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     url = protocolo + sub + raiz + tld + ruta_metodo
+    if URL_TELEGRAM: url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
     headers = {
@@ -71,9 +73,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i])
-            low = float(klines[i])
-            prev_close = float(klines[i-1])
+            high = float(klines[i][2])
+            low = float(klines[i][3])
+            prev_close = float(klines[i-1][4])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -142,9 +144,6 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
 
-# ------------------------------------------------------------------
-# MOTOR DE TRADING AUTÓNOMO (ALGORITMO VELAS EN SEGUNDO PLANO)
-# ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
     while True:
@@ -160,34 +159,35 @@ def ciclo_monitoreo_automatico():
                     if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)
                     
                     if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
-                        maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO[:-1])
-                        minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO[:-1])
+                        maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
+                        minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
                         
-                        if precio_actual > maximo_canal:
-                            fuerza = abs((precio_actual - maximo_canal) / maximo_canal)
+                        if ESTADO_BOT == "PREDADOR" and precio_actual >= maximo_canal:
                             if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                                ordenar = ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, fuerza)
-                            else:
-                                CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
-                                enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO EN BREAKOUT LONG")
+                                ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
                         
-                        elif precio_actual < minimo_canal:
-                            fuerza = abs((minimo_canal - precio_actual) / minimo_canal)
+                        if ESTADO_BOT == "PREDADOR" and precio_actual <= minimo_canal:
                             if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                                ordenar = ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, fuerza)
-                            else:
-                                CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
-                                enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO EN BREAKOUT SHORT")
-            time.sleep(5)
-        except Exception: time.sleep(5)
-
-def ejecutar_arranque_atomico_secreto():
-    global BOT_INICIALIZADO
-    if not BOT_INICIALIZADO:
-        with BLOQUEO_ARRANQUE:
-            if not BOT_INICIALIZADO:
-                BOT_INICIALIZADO = True
-                threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
+                                ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
+                                
+                        if ESTADO_BOT == "APLANAMIENTO":
+                            atr = calcular_atr_dinamico_flash(client_local)
+                            if atr and atr < 1.5:
+                                if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
+                                if precio_actual <= minimo_canal: ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
+        except Exception: pass
+        time.sleep(5)
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB SEPARADOS COMPATIBLES CON RENDER)
+# ENDPOINTS DE CONTROL Y COMPATIBILIDAD CON RENDER (HEALTH CHECK)
+# ------------------------------------------------------------------
+@app.route('/', methods=['GET', 'HEAD'])
+def health_check():
+    return jsonify({"status": "healthy", "bot_mode": str(ESTADO_BOT)}), 200
+
+@app.route('/webhook', methods=['POST'])
+def recibir_senal_analitica():
+    client_local = obtener_cliente_binance()
+    data = request.get_json() or {}
+    direccion = data.get('direccion')
+    fuerza = float(data.get('fuerza', 0.0))
