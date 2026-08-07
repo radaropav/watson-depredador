@@ -25,7 +25,6 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
-URL_TELEGRAM = os.getenv("URL_TELEGRAM")
 
 PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
 
@@ -47,15 +46,21 @@ def obtener_cliente_binance():
     return None
 
 def enviar_telegram(mensaje):
-    if not TELEGRAM_TOKEN or not URL_TELEGRAM: return False
-    # REGLA REPARADA DE RED REGIONAL: Se evalúa si el proxy guardado ya contiene la API oficial de Telegram
-    # Si la variable es exactamente la url raíz base publica, se le anexa el segmento "/bot" faltante
-    url_base = str(URL_TELEGRAM)
-    m = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
-    url = url_base + m if url_base == "https://telegram.org" else url_base + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
+    if not TELEGRAM_TOKEN: return False
+    # CONSTRUCTOR ATÓMICO COPIADO DE TU HISTORIAL DE ÉXITO
+    # Ensamblaje clásico fragmentado libre de variables corruptas de Render
+    protocolo = "https://"
+    sub = "api."
+    raiz = "telegram"
+    tld = ".org"
+    ruta_metodo = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
+    url = protocolo + sub + raiz + tld + ruta_metodo
     
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
-    headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Content-Type": "application/json"
+    }
     try:
         requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
         return True
@@ -67,9 +72,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
+            high = float(klines[i])
+            low = float(klines[i])
+            prev_close = float(klines[i-1])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -170,16 +175,14 @@ def ejecutar_arranque_atomico_secreto():
                 threading.Thread(target=hilo_arranque_seguro, daemon=True).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB PERFECTAMENTE INDENTADOS)
+# VÍAS DE ENTRADA (MÉTODOS WEB CON ACCESO ATÓMICO COMPATIBLE)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def ruta_raiz_lineal():
-    ejecutar_arranque_atomico_secreto()
     return jsonify({"status": "Watson Online", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/health', methods=['GET'])
 def ruta_health_lineal():
-    ejecutar_arranque_atomico_secreto()
     return jsonify({"status": "healthy", "estado_bot": ESTADO_BOT}), 200
 
 @app.route('/webhook', methods=['POST'])
@@ -195,3 +198,5 @@ def ruta_webhook_lineal():
     ULTIMO_PRECIO_MONITOREO = precio_origen
     if direccion not in ["LONG", "SHORT"] or precio_origen <= 0:
         return jsonify({"status": "error", "reason": "Parametros invalidos"}), 400
+    if not evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
+        CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
