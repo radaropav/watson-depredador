@@ -187,6 +187,7 @@ def ejecutar_arranque_atomico_secreto():
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Obra maestra online.")
+                # BYPASS DE RENDER: Se eliminó el mensaje síncronizado para que no se cuelgue la pre-carga
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
+# ------------------------------------------------------------------
