@@ -37,10 +37,6 @@ CONTADOR_MECHAZOS = 0
 # Almacenamiento local para el algoritmo de ruptura autónoma de 3 velas
 HISTORIAL_PRECIOS_MAESTRO = []
 
-# Cerrojeros de inicialización atómica en memoria RAM
-BOT_INICIALIZADO = False
-BLOQUEO_ARRANQUE = threading.Lock()
-
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try: return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -178,16 +174,19 @@ def ciclo_monitoreo_automatico():
         except Exception: pass
         time.sleep(5)
 
+# ARRANCAR HILO DE MONITOREO DE MANERA DIRECTA EN EL PROCESO GLOBAL
+hilo_global = threading.Thread(target=ciclo_monitoreo_automatico)
+hilo_global.daemon = True
+hilo_global.start()
+
 # ------------------------------------------------------------------
-# ENDPOINTS DE CONTROL Y INTERFAZ INTERACTIVA (SIN LLAVES HTML)
+# ENDPOINT ÚNICO CENTRALIZADO (EVITA FALLAS DE ENRUTAMIENTO WSGI)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD'])
-def health_check():
-    return jsonify({"status": "healthy", "bot_mode": str(ESTADO_BOT)}), 200
-
-@app.route('/webhook', methods=['POST'])
-def recibir_senal_analitica():
-    client_local = obtener_cliente_binance()
-    data = request.get_json() or {}
-    direccion = data.get('direccion')
-    fuerza = float(data.get('fuerza', 0.0))
+def mostrar_dashboard_centralizado():
+    if request.method == 'HEAD': return jsonify({"status": "healthy"}), 200
+    
+    color_modo = "#ff9100"
+    if ESTADO_BOT == "PREDADOR": color_modo = "#00e676"
+    if ESTADO_BOT == "OFF": color_modo = "#ff1744"
+    
