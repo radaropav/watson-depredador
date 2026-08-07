@@ -37,10 +37,6 @@ CONTADOR_MECHAZOS = 0
 # Almacenamiento local para el algoritmo de ruptura autónoma de 3 velas
 HISTORIAL_PRECIOS_MAESTRO = []
 
-# Cerrojero atómico de inicialización en RAM para evitar congelamientos en precarga
-BOT_INICIALIZADO = False
-BLOQUEO_ARRANQUE = threading.Lock()
-
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try: return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
@@ -146,6 +142,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
+    time.sleep(12)  # BYPASS: Retraso forzado lineal para que Gunicorn termine de abrir el puerto web en paz
     while True:
         try:
             if ESTADO_BOT != "OFF":
@@ -178,14 +175,16 @@ def ciclo_monitoreo_automatico():
         except Exception: pass
         time.sleep(5)
 
+# DISPARO DIRECTO DEL HILO DE ENTRADA EN SEGUNDO PLANO
+hilo_global = threading.Thread(target=ciclo_monitoreo_automatico)
+hilo_global.daemon = True
+hilo_global.start()
+
 # ------------------------------------------------------------------
-# MASTER INTERACTIVE DASHBOARD CON DISPARO DE HILO CONCURRENTE SEGURO
+# MASTER INTERACTIVE DASHBOARD CON RESPUESTA VALIDA HTTP DE UNA LINEA
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD', 'POST'])
 def master_bypass_raiz():
-    global BOT_INICIALIZADO
     if request.method == 'HEAD': return jsonify({"status": "healthy"}), 200
     
-    # DISPARO SEGURO DEL HILO TRAS LA PRIMERA SOLICITUD WEB REAL (EVITA CONGELAR LA PRECARGA)
-    if not BOT_INICIALIZADO:
-        with BLOQUEO_ARRANQUE:
+    color_modo = "#ff9100"
