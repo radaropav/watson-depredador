@@ -3,7 +3,7 @@ import time
 import requests
 import hashlib
 import threading
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, request, jsonify, redirect, make_response
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
@@ -180,7 +180,7 @@ hilo_global.daemon = True
 hilo_global.start()
 
 # ------------------------------------------------------------------
-# BYPASS TOTAL: ENDPOINT RAÍZ INMUNE A ERRORES DE RETORNO HTTP
+# MASTER INTERACTIVE DASHBOARD CON EMPAQUETADO HTTP EXPLICITO
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD', 'POST'])
 def master_bypass_raiz():
