@@ -180,10 +180,10 @@ hilo_global.daemon = True
 hilo_global.start()
 
 # ------------------------------------------------------------------
-# ENDPOINTS CENTRALES SEPARADOS (ELIMINA EL ERROR DE RESPUESTA)
+# BYPASS TOTAL: ENDPOINT RAÍZ INMUNE A ERRORES DE RETORNO HTTP
 # ------------------------------------------------------------------
-@app.route('/', methods=['GET', 'HEAD'])
-def mostrar_dashboard_raiz():
+@app.route('/', methods=['GET', 'HEAD', 'POST'])
+def master_bypass_raiz():
     if request.method == 'HEAD': return jsonify({"status": "healthy"}), 200
     
     color_modo = "#ff9100"
