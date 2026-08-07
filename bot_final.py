@@ -142,7 +142,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
-    time.sleep(12)  # BYPASS: Retraso forzado para que Gunicorn termine de levantar la interfaz web en la RAM
+    time.sleep(12)  # BYPASS: Retraso para dejar que Gunicorn levante la red en la RAM en paz
     while True:
         try:
             if ESTADO_BOT != "OFF":
@@ -181,10 +181,12 @@ hilo_global.daemon = True
 hilo_global.start()
 
 # ------------------------------------------------------------------
-# MASTER INTERACTIVE DASHBOARD CON RETORNO OBLIGATORIO DE RESPUESTA
+# MASTER INTERACTIVE DASHBOARD CON RETORNO LINEAL OBLIGATORIO FILTRADO
 # ------------------------------------------------------------------
-@app.route('/', methods=['GET', 'HEAD', 'POST'])
-def master_bypass_raiz():
-    if request.method == 'HEAD': return jsonify({"status": "healthy"}), 200
-    
+@app.route('/', methods=['HEAD'])
+def responder_salud_head():
+    return jsonify({"status": "healthy"}), 200
+
+@app.route('/', methods=['GET'])
+def master_bypass_raiz_get():
     color_modo = "#ff9100"
