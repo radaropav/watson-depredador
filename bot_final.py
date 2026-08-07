@@ -7,11 +7,11 @@ from flask import Flask, request, jsonify
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
-# Desactivar alertas de certificados inseguros para el bypass forzado de red
+# Desactivar alertas de certificados inseguros para el bypass forzado
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización del microservicio de red nativa unificada
+# Inicialización nativa obligatoria para el despachador WSGI de Gunicorn
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
@@ -143,7 +143,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return str(e)
 
 # ------------------------------------------------------------------
-# ENTORNO PERPETUO DE MONITOREO (CAPA 1 Y 2 ASÍNCRONAS EN LA RAM)
+# MOTOR DE TRADING AUTÓNOMO (ALGORITMO 3 VELAS)
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
@@ -189,5 +189,6 @@ def ejecutar_arranque_atomico_secreto():
                 BOT_INICIALIZADO = True
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
-# ------------------------------------------------------------------
-# CAPA INTERACTIVA (MÉTODOS WEB EXPUESTOS AL PUERTO NATIVO)
+# GATILLO PASIVO INTELIGENTE: Detona el hilo de Binance de forma segura después de que Flask ya cargó las rutas
+@app.before_request
+def disparador_pasivo_infraestructura():
