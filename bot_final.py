@@ -18,7 +18,7 @@ SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
-# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
+# EXTRACCIÓN SEGURA DE CREDENCIALES Y PROXYS DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
@@ -26,14 +26,15 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
 
-PASSWORD_HASH_SECRETO = os.getenv("DASHBOARD_PASSWORD_HASH", "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92")
-
 # VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
 LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
 ULTIMO_PRECIO_MONITOREO = 0.0 
 ULTIMO_ATR_MONITOREO = 0.0    
 CONTADOR_MECHAZOS = 0         
+
+# Almacenamiento local para el algoritmo de ruptura autónoma de 3 velas
+HISTORIAL_PRECIOS_MAESTRO = []
 
 # Cerrojeros de inicialización atómica en memoria RAM
 BOT_INICIALIZADO = False
@@ -47,7 +48,6 @@ def obtener_cliente_binance():
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN: return False
-    # CONSTRUCTOR NATIVO RESPALDADO POR TU COMPORTAMIENTO DE ÉXITO HISTÓRICO
     protocolo = "https://"
     sub = "api."
     raiz = "telegram"
@@ -93,7 +93,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
     global ULTIMO_ATR_MONITOREO
     if not client_local: return "Cliente Binance no inicializado"
     try:
-        leverage = 20 if fuerza_senal >= 0.0040 else 10
+        leverage = 20 if fuerza_senal >= 0.0040 else LEVERAGE_MANUAL
         if ESTADO_BOT == "OFF": return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
 
         if ESTADO_BOT == "APLANAMIENTO":
@@ -142,22 +142,42 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
 
-def verificar_credenciales(password_plano):
-    if not password_plano: return False
-    return hashlib.sha256(password_plano.encode('utf-8')).hexdigest() == PASSWORD_HASH_SECRETO
-
 # ------------------------------------------------------------------
-# TÚNEL PERPETUO HTTPS FLASH MAXIMIZADO CON CACHÉ DINÁMICA
+# MOTOR DE TRADING AUTÓNOMO E INYECTOR HISTÓRICO Continúo
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
-    global ULTIMO_PRECIO_MONITOREO
+    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
     while True:
         try:
             if ESTADO_BOT != "OFF":
                 client_local = obtener_cliente_binance()
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-                    ULTIMO_PRECIO_MONITOREO = float(ticker['price'])
+                    precio_actual = float(ticker['price'])
+                    ULTIMO_PRECIO_MONITOREO = precio_actual
+                    
+                    HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
+                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)
+                    
+                    if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
+                        maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO[:-1])
+                        minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO[:-1])
+                        
+                        if precio_actual > maximo_canal:
+                            fuerza = abs((precio_actual - maximo_canal) / maximo_canal)
+                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
+                                ordenar = ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, fuerza)
+                            else:
+                                CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
+                                enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO EN BREAKOUT LONG")
+                        
+                        elif precio_actual < minimo_canal:
+                            fuerza = abs((minimo_canal - precio_actual) / minimo_canal)
+                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
+                                ordenar = ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, fuerza)
+                            else:
+                                CONTADOR_MECHAZOS = CONTADOR_MECHAZOS + 1
+                                enviar_telegram("DISPARO_CANCELADO > MOTIVO: MECHAZO EN BREAKOUT SHORT")
             time.sleep(5)
         except Exception: time.sleep(5)
 
@@ -167,40 +187,6 @@ def ejecutar_arranque_atomico_secreto():
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                # DISPARO SÍNCRONO DEFINITIVO DESDE EL HILO MAESTRO
                 enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Obra maestra online.")
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
-# ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB SECTORIZADOS EN LA RAÍZ PRINCIPAL)
-# ------------------------------------------------------------------
-@app.route('/', methods=['GET', 'POST'])
-def ruta_raiz_maestra_unificada():
-    global ESTADO_BOT, LEVERAGE_MANUAL
-    # Detona la red en el acto al cargar el unico endpoint obligatorio
-    ejecutar_arranque_atomico_secreto()
-    
-    if request.method == 'POST':
-        datos = request.get_json(force=True) or {}
-        modo = str(datos.get("nuevo_modo", "")).upper()
-        ESTADO_BOT = modo if modo in ["OFF", "PREDADOR", "APLANAMIENTO"] else ESTADO_BOT
-        LEVERAGE_MANUAL = int(datos.get("nuevo_leverage")) if "nuevo_leverage" in datos else LEVERAGE_MANUAL
-
-    return jsonify({
-        "status": "success",
-        "activo": SYMBOL,
-        "estado_actual_bot": ESTADO_BOT,
-        "leverage_actual": LEVERAGE_MANUAL,
-        "ultimo_precio_visto": ULTIMO_PRECIO_MONITOREO,
-        "ultimo_atr_calculado": ULTIMO_ATR_MONITOREO,
-        "mechazos_bloqueados": CONTADOR_MECHAZOS
-    }), 200
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({"status": "healthy"}), 200
-
-@app.route('/webhook', methods=['POST'])
-def webhook_receptor():
-    global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
-    datos = request.get_json(force=True) or {}
