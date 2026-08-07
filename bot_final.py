@@ -189,6 +189,5 @@ def ejecutar_arranque_atomico_secreto():
                 BOT_INICIALIZADO = True
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
-# GATILLO PASIVO INTELIGENTE: Sincronización matemática estricta con sangrado de 4 espacios corregido
-@app.before_request
-def disparador_pasivo_infraestructura():
+# ------------------------------------------------------------------
+# VÍAS DE ENTRADA (MÉTODOS WEB SEPARADOS COMPATIBLES CON RENDER)
