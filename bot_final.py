@@ -11,14 +11,14 @@ from binance.exceptions import BinanceAPIException
 from requests.packages import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Inicialización nativa con guiones dobles para el mapa de rutas de Flask
+# Inicialización nativa obligatoria para el despachador WSGI de Gunicorn
 app = Flask(__name__)
 
 SYMBOL = "ETHUSDT"
 TELEGRAM_CHAT_ID = "-1004335003036"
 FILTRO_MECHAZO_MAX = 0.0018  
 
-# EXTRACCIÓN SEGURA DE CREDENCIALES Y PROXYS DESDE EL ENTORNO DE RENDER
+# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
@@ -143,7 +143,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         return str(e)
 
 # ------------------------------------------------------------------
-# MOTOR DE TRADING AUTÓNOMO
+# MOTOR DE TRADING AUTÓNOMO (ALGORITMO 3 VELAS ASÍNCRONO)
 # ------------------------------------------------------------------
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
@@ -187,7 +187,6 @@ def ejecutar_arranque_atomico_secreto():
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                enviar_telegram("SISTEMA_WATSON: Conectividad proxy restaurada con exito. Obra maestra online.")
+                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Obra maestra online.")
                 threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
-# ------------------------------------------------------------------
