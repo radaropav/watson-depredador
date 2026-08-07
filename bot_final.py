@@ -47,8 +47,7 @@ def obtener_cliente_binance():
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN: return False
-    # CONSTRUCTOR ATÓMICO COPIADO DE TU HISTORIAL DE ÉXITO
-    # Ensamblaje clásico fragmentado libre de variables corruptas de Render
+    # CONSTRUCTOR NATIVO FRAGMENTADO RESPALDADO POR TU HISTORIAL
     protocolo = "https://"
     sub = "api."
     raiz = "telegram"
@@ -162,20 +161,18 @@ def ciclo_monitoreo_automatico():
             time.sleep(5)
         except Exception: time.sleep(5)
 
-def hilo_arranque_seguro():
-    enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Proyecto iniciado desde 0.")
-    ciclo_monitoreo_automatico()
-
 def ejecutar_arranque_atomico_secreto():
     global BOT_INICIALIZADO
     if not BOT_INICIALIZADO:
         with BLOQUEO_ARRANQUE:
             if not BOT_INICIALIZADO:
                 BOT_INICIALIZADO = True
-                threading.Thread(target=hilo_arranque_seguro, daemon=True).start()
+                # FLUJO SÍNCRONO DIRECTO: El mensaje sale de inmediato en el hilo principal
+                enviar_telegram("SISTEMA WATSON: Conectividad proxy restaurada con exito. Proyecto iniciado desde 0.")
+                threading.Thread(target=cycle_run, daemon=True).start() if hasattr(globals(), 'cycle_run') else threading.Thread(target=ciclo_monitoreo_automatico, daemon=True).start()
 
 # ------------------------------------------------------------------
-# VÍAS DE ENTRADA (MÉTODOS WEB CON ACCESO ATÓMICO COMPATIBLE)
+# VÍAS DE ENTRADA (MÉTODOS WEB CON SQUEEZE LINEAL INMUNE)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET'])
 def ruta_raiz_lineal():
@@ -188,7 +185,6 @@ def ruta_health_lineal():
 @app.route('/webhook', methods=['POST'])
 def ruta_webhook_lineal():
     global CONTADOR_MECHAZOS, ULTIMO_PRECIO_MONITOREO
-    ejecutar_arranque_atomico_secreto()
     datos = request.get_json(force=True) or {}
     direccion = str(datos.get("direccion", "")).upper()
     fuerza_senal = float(datos.get("variacion", 0.0))
