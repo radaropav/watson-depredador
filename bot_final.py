@@ -193,4 +193,4 @@ def ciclo_monitoreo_automatico():
                         if ESTADO_BOT == "APLANAMIENTO":
                             atr = calcular_atr_dinamico_flash(client_local)
                             if atr and atr < 1.5:
-                                if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
+                                if precio_actual >= maximo_canal: 
