@@ -129,6 +129,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_create_order(symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, closePosition=True)
         client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, closePosition=True)
+                guardar_auditoria_supabase(direccion, precio_mercado)        
 
         msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
         enviar_telegram(msg)
@@ -207,5 +208,34 @@ hilo_global.start()
 @app.route('/', methods=['GET', 'HEAD', 'POST'])
 def responder_salud_inmune():
     return jsonify({"status": "healthy", "bot": "online", "mode": str(ESTADO_BOT)}), 200
+
+def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
+    url = os.getenv("URL_SUPABASE_TABLA")
+    if not url: return
+    
+    # Truco de limpieza: Reemplazar el endpoint de lectura por el de la tabla de trades
+    url_trades = url.replace("control_bot", "historial_trades")
+    # Limpiamos los filtros de lectura para dejar la URL limpia de escritura
+    url_trades = url_trades.split("?")[0]
+    
+    token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
+    headers = dict([
+        ("apikey", str(os.getenv("SUPABASE_KEY"))),
+        ("Authorization", token),
+        ("Content-Type", "application/json"),
+        ("Prefer", "return=minimal")
+    ])
+    
+    # Payload seguro sin una sola llave nativa
+    payload = dict(
+        direccion=str(direccion_orden),
+        precio=float(precio_ejecutado)
+    )
+    
+    try:
+        requests.post(url_trades, json=payload, headers=headers, timeout=8, verify=False)
+    except Exception:
+        pass
+
 
 # ------------------------------------------------------------------
