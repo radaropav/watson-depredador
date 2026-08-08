@@ -140,11 +140,32 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
 
+def leer_comando_supabase():
+        global ESTADO_BOT
+        url = os.getenv("URL_SUPABASE_TABLA")
+        if not url: return
+        
+        token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
+        headers = dict([
+            ("apikey", str(os.getenv("SUPABASE_KEY"))),
+            ("Authorization", token)
+        ])
+        try:
+            respuesta = requests.get(url, headers=headers, timeout=8, verify=False)
+            if respuesta.status_code == 200:
+                datos = respuesta.json()
+                if datos and len(datos) > 0:
+                    primer_registro = datos[0]
+                    ESTADO_BOT = str(primer_registro.get("estado", ESTADO_BOT))
+        except Exception:
+            pass
+
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
     time.sleep(15)  # BYPASS: Retraso forzado para blindar la inicialización limpia de Gunicorn
     while True:
         try:
+            leer_comando_supabase()
             if ESTADO_BOT != "OFF":
                 client_local = obtener_cliente_binance()
                 if client_local:
