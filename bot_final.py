@@ -84,7 +84,10 @@ def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
         ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
         precio_actual = float(ticker['price'])
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
-        return variacion_micro <= FILTRO_MECHAZO_MAX
+        if variacion_micro > FILTRO_MECHAZO_MAX:
+                 registrar_mechazo_evitado_supabase(precio_actual)
+                 return False
+        return True
     except Exception: return False
 
 def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_senal):
@@ -235,6 +238,30 @@ def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
         requests.post(url_trades, json=payload, headers=headers, timeout=8, verify=False)
     except Exception:
         pass
+
+def registrar_mechazo_evitado_supabase(precio_origen):
+    url = os.getenv("URL_SUPABASE_TABLA")
+    if not url: return
+    
+    url_mechazos = url.replace("control_bot", "registro_mechazos")
+    url_mechazos = url_mechazos.split("?")
+    
+    token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
+    headers = dict([
+        ("apikey", str(os.getenv("SUPABASE_KEY"))),
+        ("Authorization", token),
+        ("Content-Type", "application/json"),
+        ("Prefer", "return=minimal")
+    ])
+    
+    payload = dict(
+        perdida_evitada=float(5.50)
+    )
+    try:
+        requests.post(url_mechazos[0], json=payload, headers=headers, timeout=8, verify=False)
+    except Exception:
+        pass
+
 
 
 # ------------------------------------------------------------------
