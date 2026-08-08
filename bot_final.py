@@ -53,35 +53,15 @@ def enviar_telegram(mensaje):
     url = protocolo + sub + raiz + tld + ruta_metodo
     if URL_TELEGRAM: url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     
-    payload = dict(chat_id=TELEGRAM_CHAT_ID, text=mensaje)
-    headers = dict([
-        ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
-        ("Content-Type", "application/json")
-    ])
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Content-Type": "application/json"
+    }
     try:
         requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
         return True
     except Exception: return False
-
-def leer_comando_supabase():
-    global ESTADO_BOT
-    url = os.getenv("URL_SUPABASE_TABLA")
-    if not url: return
-    
-    token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
-    headers = dict([
-        ("apikey", str(os.getenv("SUPABASE_KEY"))),
-        ("Authorization", token)
-    ])
-    try:
-        respuesta = requests.get(url, headers=headers, timeout=8, verify=False)
-        if respuesta.status_code == 200:
-            datos = respuesta.json()
-            if datos and len(datos) > 0:
-                primer_registro = datos
-                ESTADO_BOT = str(primer_registro.get("estado", ESTADO_BOT))
-    except Exception:
-        pass
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
     if not client_local: return None
@@ -162,11 +142,9 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
-    time.sleep(15)
+    time.sleep(15)  # BYPASS: Retraso forzado para blindar la inicialización limpia de Gunicorn
     while True:
         try:
-            leer_comando_supabase()
-
             if ESTADO_BOT != "OFF":
                 client_local = obtener_cliente_binance()
                 if client_local:
@@ -182,18 +160,31 @@ def ciclo_monitoreo_automatico():
                         minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
                         
                         if ESTADO_BOT == "PREDADOR" and precio_actual >= maximo_canal:
-                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual): ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
+                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
+                                ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
                         
                         if ESTADO_BOT == "PREDADOR" and precio_actual <= minimo_canal:
-                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual): ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
+                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
+                                ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
                                 
                         if ESTADO_BOT == "APLANAMIENTO":
                             atr = calcular_atr_dinamico_flash(client_local)
                             if atr and atr < 1.5:
                                 if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
                                 if precio_actual <= minimo_canal: ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
-        except Exception: 
-            pass
+        except Exception: pass
         time.sleep(5)
 
 # DISPARO DIRECTO DEL HILO DE ENTRADA EN SEGUNDO PLANO
+hilo_global = threading.Thread(target=ciclo_monitoreo_automatico)
+hilo_global.daemon = True
+hilo_global.start()
+
+# ------------------------------------------------------------------
+# BYPASS TOTAL INMUNE: LA RAÍZ ENTREGA SOLO JSON (VIVO AL 100%)
+# ------------------------------------------------------------------
+@app.route('/', methods=['GET', 'HEAD', 'POST'])
+def responder_salud_inmune():
+    return jsonify({"status": "healthy", "bot": "online", "mode": str(ESTADO_BOT)}), 200
+
+# ------------------------------------------------------------------
