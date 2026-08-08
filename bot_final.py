@@ -175,24 +175,25 @@ def ciclo_monitoreo_automatico():
                     ULTIMO_PRECIO_MONITOREO = precio_actual
                     
                     HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
-                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
-                        HISTORIAL_PRECIOS_MAESTRO.pop(0)
+                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)
                     
                     if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
                         maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
                         minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
                         
                         if ESTADO_BOT == "PREDADOR" and precio_actual >= maximo_canal:
-                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                                ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
+                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual): ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
                         
                         if ESTADO_BOT == "PREDADOR" and precio_actual <= minimo_canal:
-                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                                ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
+                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual): ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
                                 
                         if ESTADO_BOT == "APLANAMIENTO":
                             atr = calcular_atr_dinamico_flash(client_local)
                             if atr and atr < 1.5:
-                                if precio_actual >= maximo_canal: 
-                                    ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
-                                if precio_actual <= minimo_canal: 
+                                if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
+                                if precio_actual <= minimo_canal: ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
+        except Exception: 
+            pass
+        time.sleep(5)
+
+# DISPARO DIRECTO DEL HILO DE ENTRADA EN SEGUNDO PLANO
