@@ -53,7 +53,7 @@ def enviar_telegram(mensaje):
     url = protocolo + sub + raiz + tld + ruta_metodo
     if URL_TELEGRAM: url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     
-    # Eliminación absoluta de llaves mediante dict() y tuplas estructuradas
+    # Payload y Headers limpios construidos sin usar llaves nativas
     payload = dict(chat_id=TELEGRAM_CHAT_ID, text=mensaje)
     headers = dict([
         ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
@@ -90,7 +90,6 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            # Corrección técnica: Extracción de índices correctos de la lista de klines de Binance
             high = float(klines[i][2])
             low = float(klines[i][3])
             prev_close = float(klines[i-1][4])
@@ -104,7 +103,7 @@ def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
     if not client_local: return False
     try:
         ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-        precio_actual = float(ticker.get('price', 0))
+        precio_actual = float(ticker['price'])
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
         return variacion_micro <= FILTRO_MECHAZO_MAX
     except Exception: return False
@@ -141,7 +140,8 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = client_local.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
-        quantity = round((balance_disponible * 0.25 * leverage) / precio_mercado, 3) if balance_disponible > 400.0 else round((balance_disponible * 0.10 * leverage) / precio_mercado, 3)
+        capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
+        quantity = round((capital_operativo * leverage) / precio_mercado, 3)
         if quantity <= 0: return "Capital insuficiente"
 
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
@@ -166,14 +166,14 @@ def ciclo_monitoreo_automatico():
     time.sleep(15)  # BYPASS: Retraso forzado para blindar la inicialización limpia de Gunicorn
     while True:
         try:
-            # Sincronización asíncrona mediante Supabase antes de evaluar mercado
+            # Lectura del comando externo remoto antes de procesar el ciclo de mercado
             leer_comando_supabase()
-            
+
             if ESTADO_BOT != "OFF":
                 client_local = obtener_cliente_binance()
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-                    precio_actual = float(ticker.get('price', 0))
+                    precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
                     
                     HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
@@ -193,3 +193,4 @@ def ciclo_monitoreo_automatico():
                                 
                         if ESTADO_BOT == "APLANAMIENTO":
                             atr = calcular_atr_dinamico_flash(client_local)
+                            if atr and atr < 1.5:
