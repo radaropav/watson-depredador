@@ -53,7 +53,6 @@ def enviar_telegram(mensaje):
     url = protocolo + sub + raiz + tld + ruta_metodo
     if URL_TELEGRAM: url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
     
-    # Payload y Headers limpios construidos sin usar llaves nativas
     payload = dict(chat_id=TELEGRAM_CHAT_ID, text=mensaje)
     headers = dict([
         ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
@@ -79,7 +78,7 @@ def leer_comando_supabase():
         if respuesta.status_code == 200:
             datos = respuesta.json()
             if datos and len(datos) > 0:
-                primer_registro = datos[0]
+                primer_registro = datos
                 ESTADO_BOT = str(primer_registro.get("estado", ESTADO_BOT))
     except Exception:
         pass
@@ -90,9 +89,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
+            high = float(klines[i])
+            low = float(klines[i])
+            prev_close = float(klines[i-1])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
@@ -194,3 +193,4 @@ def ciclo_monitoreo_automatico():
                         if ESTADO_BOT == "APLANAMIENTO":
                             atr = calcular_atr_dinamico_flash(client_local)
                             if atr and atr < 1.5:
+                                if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
