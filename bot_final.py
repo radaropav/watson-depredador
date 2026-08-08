@@ -162,10 +162,9 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
-    time.sleep(15)  # BYPASS: Retraso forzado para blindar la inicialización limpia de Gunicorn
+    time.sleep(15)
     while True:
         try:
-            # Lectura del comando externo remoto antes de procesar el ciclo de mercado
             leer_comando_supabase()
 
             if ESTADO_BOT != "OFF":
@@ -176,7 +175,8 @@ def ciclo_monitoreo_automatico():
                     ULTIMO_PRECIO_MONITOREO = precio_actual
                     
                     HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
-                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)
+                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
+                        HISTORIAL_PRECIOS_MAESTRO.pop(0)
                     
                     if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
                         maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
@@ -194,3 +194,5 @@ def ciclo_monitoreo_automatico():
                             atr = calcular_atr_dinamico_flash(client_local)
                             if atr and atr < 1.5:
                                 if precio_actual >= maximo_canal: 
+                                    ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
+                                if precio_actual <= minimo_canal: 
