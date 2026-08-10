@@ -86,6 +86,9 @@ def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
         if variacion_micro > FILTRO_MECHAZO_MAX:
                  registrar_mechazo_evitado_supabase(precio_actual)
+                 porcentaje_formateado = round(variacion_micro * 100, 3)
+                 msg_bloqueo = "⚠️ ALERTA MITIGACIÓN WATSON\n• Orden Cancelada: Mechazo Detectado\n• Variación Micro: " + str(porcentaje_formateado) + "%\n• Precio Ticker: " + str(precio_actual)
+                 enviar_telegram(msg_bloqueo)
                  return False
         return True
     except Exception: return False
