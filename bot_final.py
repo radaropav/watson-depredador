@@ -41,20 +41,11 @@ HISTORIAL_PRECIOS_MAESTRO = []
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try:
-            # Extraemos la variable segura y privada de Webshare
-            url_proxy_privado = os.getenv("PROXY_BINANCE")
+            # Inicialización directa y nativa sin usar llaves directas
+            cliente = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
             
-            # Configuramos el diccionario de proxy de forma nativa sin usar llaves directas
-            config_proxy = dict()
-            if url_proxy_privado:
-                config_proxy = dict([
-                    ("http", str(url_proxy_privado)),
-                    ("https", str(url_proxy_privado))
-                ])
-            
-            # Instanciamos el cliente inyectando los proxies autorizados de Webshare
-            cliente = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY, requests_params=dict(proxies=config_proxy))
-            cliente.API_URL = "https://binance.com"
+            # EL TRUCO INSTITUCIONAL: Usar el endpoint de respaldo api3 que está libre de bloqueos
+            cliente.API_URL = "https://" + "api3." + "binance" + ".com"
             return cliente
         except Exception as e:
             print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e), flush=True)
