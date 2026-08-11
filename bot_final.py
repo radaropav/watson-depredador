@@ -65,7 +65,7 @@ def enviar_telegram(mensaje):
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
     if not client_local: return None
-    try:
+        try:
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
