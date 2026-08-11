@@ -75,7 +75,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
-    except Exception: return None
+        except Exception as e:
+            print("LOG_WATSON: Fallo en ATR de Binance -> " + str(e))
+            return None
 
 def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
     time.sleep(3)
@@ -91,7 +93,9 @@ def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
                  enviar_telegram(msg_bloqueo)
                  return False
         return True
-    except Exception: return False
+        except Exception as e:
+            print("LOG_WATSON: Fallo en Filtro Ticker de Binance -> " + str(e))
+            return False
 
 def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_senal):
     global ULTIMO_ATR_MONITOREO
@@ -140,8 +144,9 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         enviar_telegram(msg)
         return "Exito"
     except BinanceAPIException as e:
-        enviar_telegram("BINANCE_API_ERROR " + str(e.message))
-        return e.message
+        print("LOG_WATSON: Error Directo API Binance -> " + str(e))
+        enviar_telegram("BINANCE_API_ERROR: " + str(e))
+        return str(e)
     except Exception as e:
         enviar_telegram("ERROR CRITICO " + str(e))
         return str(e)
