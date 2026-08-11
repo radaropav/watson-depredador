@@ -189,7 +189,7 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
-                    print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO))), flush=True)                                        
+                    print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)), flush=True)                                        
                     if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
                         maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
                         minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
