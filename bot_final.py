@@ -42,7 +42,7 @@ def obtener_cliente_binance():
         try: 
             return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
         except Exception as e: 
-            print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e))
+            print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e)), flush=True)
             return None
     
     print("LOG_WATSON_BINANCE_FALLO: Las variables de entorno de las API Keys estan vacias en Render.")
@@ -189,7 +189,7 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
-                    print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)))                                        
+                    print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO))), flush=True)                                        
                     if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
                         maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
                         minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
