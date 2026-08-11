@@ -65,7 +65,7 @@ def enviar_telegram(mensaje):
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
     if not client_local: return None
-        try:
+    try:
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
         for i in range(1, len(klines)):
@@ -75,9 +75,9 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         return sum(true_ranges) / len(true_ranges)
-        except Exception as e:
-            print("LOG_WATSON: Fallo en ATR de Binance -> " + str(e))
-            return None
+    except Exception as e:
+        print("LOG_WATSON: Fallo en ATR de Binance -> " + str(e))
+        return None
 
 def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
     time.sleep(3)
