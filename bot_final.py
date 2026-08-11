@@ -39,8 +39,13 @@ HISTORIAL_PRECIOS_MAESTRO = []
 
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
-        try: return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-        except Exception: return None
+        try: 
+            return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
+        except Exception as e: 
+            print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e))
+            return None
+    
+    print("LOG_WATSON_BINANCE_FALLO: Las variables de entorno de las API Keys estan vacias en Render.")
     return None
 
 def enviar_telegram(mensaje):
