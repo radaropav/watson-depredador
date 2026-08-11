@@ -42,7 +42,7 @@ def obtener_cliente_binance():
         try: 
             return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
         except Exception as e: 
-            print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e)), flush=True)
+            print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e), flush=True)
             return None
     
     print("LOG_WATSON_BINANCE_FALLO: Las variables de entorno de las API Keys estan vacias en Render.")
