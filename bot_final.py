@@ -168,8 +168,8 @@ def leer_comando_supabase():
                 if datos and len(datos) > 0:
                     primer_registro = datos[0]
                     ESTADO_BOT = str(primer_registro.get("estado", ESTADO_BOT))
-        except Exception:
-            pass
+        except Exception as e:
+            print("LOG_WATSON_SUPABASE: Fallo critico de red -> " + str(e))
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
@@ -179,6 +179,7 @@ def ciclo_monitoreo_automatico():
             leer_comando_supabase()
             if ESTADO_BOT != "OFF":
                 client_local = obtener_cliente_binance()
+                print("LOG_WATSON_DEBUG: Intentando conectar a Binance... Resultado: " + str(client_local))
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
