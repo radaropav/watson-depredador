@@ -93,6 +93,10 @@ def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
                  enviar_telegram(msg_bloqueo)
                  return False
         return True
+    except Exception as e:
+        print("LOG_WATSON: Fallo en Filtro Ticker de Binance -> " + str(e))
+        return False
+
         except Exception as e:
             print("LOG_WATSON: Fallo en Filtro Ticker de Binance -> " + str(e))
             return False
