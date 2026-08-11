@@ -1,4 +1,5 @@
 import os
+import base64
 import time
 import requests
 import hashlib
@@ -311,7 +312,7 @@ def registrar_mechazo_evitado_supabase(precio_origen):
         perdida_evitada=float(5.50)
     )
     try:
-        requests.post(url_mechazos[0], json=payload, headers=headers, timeout=8, verify=False)
+        requests.post(url_mechazos, json=payload, headers=headers, timeout=8, verify=False)
     except Exception:
         pass
 
