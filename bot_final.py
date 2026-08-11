@@ -218,21 +218,23 @@ hilo_global = threading.Thread(target=ciclo_monitoreo_automatico)
 hilo_global.daemon = True
 hilo_global.start()
 HILO_INICIADO = False
+CANDADO_SISTEMA = threading.Lock()
 # ------------------------------------------------------------------
 # BYPASS TOTAL INMUNE: LA RAÍZ ENTREGA SOLO JSON (VIVO AL 100%)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD', 'POST'])
 def responder_salud_inmune():
     global HILO_INICIADO
-    if not HILO_INICIADO:
-        try:
-            hilo_emergencia = threading.Thread(target=ciclo_monitoreo_automatico)
-            hilo_emergencia.daemon = True
-            hilo_emergencia.start()
-            HILO_INICIADO = True
-            print("LOG_WATSON_SISTEMA: Hilo de monitoreo forzado con exito desde pasarela HTTP.")
-        except Exception as e:
-            print("LOG_WATSON_SISTEMA: Error al forzar hilo desde HTTP -> " + str(e))
+    with CANDADO_SISTEMA:
+        if not HILO_INICIADO:
+            try:
+                hilo_emergencia = threading.Thread(target=ciclo_monitoreo_automatico)
+                hilo_emergencia.daemon = True
+                hilo_emergencia.start()
+                HILO_INICIADO = True
+                print("LOG_WATSON_SISTEMA: Hilo de monitoreo forzado con exito desde pasarela HTTP.", flush=True)
+            except Exception as e:
+                print("LOG_WATSON_SISTEMA: Error al forzar hilo desde HTTP -> " + str(e), flush=True)
             
     diccionario_respuesta = dict(
         status="healthy",
