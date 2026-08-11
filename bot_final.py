@@ -211,13 +211,29 @@ def ciclo_monitoreo_automatico():
 hilo_global = threading.Thread(target=ciclo_monitoreo_automatico)
 hilo_global.daemon = True
 hilo_global.start()
-
+HILO_INICIADO = False
 # ------------------------------------------------------------------
 # BYPASS TOTAL INMUNE: LA RAÍZ ENTREGA SOLO JSON (VIVO AL 100%)
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD', 'POST'])
 def responder_salud_inmune():
-    return jsonify({"status": "healthy", "bot": "online", "mode": str(ESTADO_BOT)}), 200
+    global HILO_INICIADO
+    if not HILO_INICIADO:
+        try:
+            hilo_emergencia = threading.Thread(target=ciclo_monitoreo_automatico)
+            hilo_emergencia.daemon = True
+            hilo_emergencia.start()
+            HILO_INICIADO = True
+            print("LOG_WATSON_SISTEMA: Hilo de monitoreo forzado con exito desde pasarela HTTP.")
+        except Exception as e:
+            print("LOG_WATSON_SISTEMA: Error al forzar hilo desde HTTP -> " + str(e))
+            
+    diccionario_respuesta = dict(
+        status="healthy",
+        bot="online",
+        mode=str(ESTADO_BOT)
+    )
+    return jsonify(diccionario_respuesta), 200
 
 def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
     url = os.getenv("URL_SUPABASE_TABLA")
