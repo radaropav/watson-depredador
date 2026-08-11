@@ -39,13 +39,13 @@ HISTORIAL_PRECIOS_MAESTRO = []
 
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
-        try: 
-            return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-        except Exception as e: 
+        try:
+            cliente = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
+            cliente.API_URL = "https://api1.binance.com"
+            return cliente
+        except Exception as e:
             print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e), flush=True)
             return None
-    
-    print("LOG_WATSON_BINANCE_FALLO: Las variables de entorno de las API Keys estan vacias en Render.")
     return None
 
 def enviar_telegram(mensaje):
@@ -208,7 +208,9 @@ def ciclo_monitoreo_automatico():
                                 if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
                                 if precio_actual <= minimo_canal: ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
                             HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
-                            if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)    
+                            if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)
+                else:
+                    time.sleep(15)               
         except Exception as e:
             print("LOG_WATSON_CRITICO: Fallo en ciclo de monitoreo -> " + str(e))
         time.sleep(5)
