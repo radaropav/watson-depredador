@@ -183,10 +183,7 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
-                    
-                    HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
-                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)
-                    
+                    print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)))                                        
                     if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
                         maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
                         minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
@@ -204,7 +201,10 @@ def ciclo_monitoreo_automatico():
                             if atr and atr < 1.5:
                                 if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
                                 if precio_actual <= minimo_canal: ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
-        except Exception: pass
+                            HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
+                            if len(HISTORIAL_PRECIOS_MAESTRO) > 12: HISTORIAL_PRECIOS_MAESTRO.pop(0)    
+        except Exception as e:
+            print("LOG_WATSON_CRITICO: Fallo en ciclo de monitoreo -> " + str(e))
         time.sleep(5)
 
 # DISPARO DIRECTO DEL HILO DE ENTRADA EN SEGUNDO PLANO
@@ -252,7 +252,7 @@ def registrar_mechazo_evitado_supabase(precio_origen):
     if not url: return
     
     url_mechazos = url.replace("control_bot", "registro_mechazos")
-    url_mechazos = url_mechazos.split("?")
+    url_mechazos = url_mechazos.split("?")[0]
     
     token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
     headers = dict([
