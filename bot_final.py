@@ -140,6 +140,10 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         balance_disponible = float(account.get('availableBalance', 0))
         capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
         quantity = round((capital_operativo * leverage) / precio_mercado, 3)
+        nocional_estimado = quantity * precio_mercado
+        if nocional_estimado < 21.0:
+            quantity = round(21.0 / precio_mercado, 3)
+        
         if quantity <= 0: return "Capital insuficiente"
 
         side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
