@@ -27,6 +27,7 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
 URL_TELEGRAM = os.getenv("URL_TELEGRAM")
+CLIENTE_BINANCE_GLOBAL = obtener_cliente_binance()
 
 # VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
@@ -191,8 +192,10 @@ def ciclo_monitoreo_automatico():
         try:
             leer_comando_supabase()
             if ESTADO_BOT != "OFF":
-                client_local = obtener_cliente_binance()
-                print("LOG_WATSON_DEBUG: Intentando conectar a Binance... Resultado: " + str(client_local))
+                if not CLIENTE_BINANCE_GLOBAL:
+                    CLIENTE_BINANCE_GLOBAL = obtener_cliente_binance()
+                client_local = CLIENTE_BINANCE_GLOBAL
+                print("LOG_WATSON_DEBUG: Utilizando Instancia Unica de Binance -> " + str(client_local))
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
@@ -239,14 +242,13 @@ CANDADO_SISTEMA = threading.Lock()
 # ------------------------------------------------------------------
 # BYPASS TOTAL INMUNE: LA RAÍZ ENTREGA SOLO JSON (VIVO AL 100%)
 # ------------------------------------------------------------------
-@app.route('/', methods=['GET', 'HEAD', 'POST'])
-def responder_salud_inmune():
-    diccionario_respuesta = dict([
-        ("status", "healthy"),
-        ("bot", "online"),
-        ("mode", str(ESTADO_BOT))
+@app.route('/health', methods=['GET', 'HEAD'])
+def responder_ping_salud_exacto():
+    diccionario_salud = dict([
+        ("status", "OK"),
+        ("code", 200)
     ])
-    return jsonify(diccionario_respuesta), 200      
+    return jsonify(diccionario_salud), 200     
 def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
     url = os.getenv("URL_SUPABASE_TABLA")
     if not url: return
