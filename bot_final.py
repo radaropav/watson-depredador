@@ -241,25 +241,12 @@ CANDADO_SISTEMA = threading.Lock()
 # ------------------------------------------------------------------
 @app.route('/', methods=['GET', 'HEAD', 'POST'])
 def responder_salud_inmune():
-    global HILO_INICIADO
-    with CANDADO_SISTEMA:
-        if not HILO_INICIADO:
-            try:
-                hilo_emergencia = threading.Thread(target=ciclo_monitoreo_automatico)
-                hilo_emergencia.daemon = True
-                hilo_emergencia.start()
-                HILO_INICIADO = True
-                print("LOG_WATSON_SISTEMA: Hilo de monitoreo forzado con exito desde pasarela HTTP.", flush=True)
-            except Exception as e:
-                print("LOG_WATSON_SISTEMA: Error al forzar hilo desde HTTP -> " + str(e), flush=True)
-            
-    diccionario_respuesta = dict(
-        status="healthy",
-        bot="online",
-        mode=str(ESTADO_BOT)
-    )
-    return jsonify(diccionario_respuesta), 200
-
+    diccionario_respuesta = dict([
+        ("status", "healthy"),
+        ("bot", "online"),
+        ("mode", str(ESTADO_BOT))
+    ])
+    return jsonify(diccionario_respuesta), 200      
 def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
     url = os.getenv("URL_SUPABASE_TABLA")
     if not url: return
