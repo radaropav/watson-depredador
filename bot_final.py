@@ -27,7 +27,6 @@ BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 URL_BINANCE = os.getenv("URL_BINANCE")
 URL_CRYPTO = os.getenv("URL_CRYPTO")
 URL_TELEGRAM = os.getenv("URL_TELEGRAM")
-CLIENTE_BINANCE_GLOBAL = obtener_cliente_binance()
 
 # VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
@@ -52,6 +51,7 @@ def obtener_cliente_binance():
             print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e), flush=True)
             return None
     return None
+    CLIENTE_BINANCE_GLOBAL = obtener_cliente_binance()
 
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN: return False
