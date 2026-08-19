@@ -51,8 +51,7 @@ def obtener_cliente_binance():
             print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e), flush=True)
             return None
     return None
-    CLIENTE_BINANCE_GLOBAL = obtener_cliente_binance()
-
+    
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN: return False
     protocolo = "https://"
@@ -186,15 +185,15 @@ def leer_comando_supabase():
             print("LOG_WATSON_SUPABASE: Fallo critico de red -> " + str(e))
 
 def ciclo_monitoreo_automatico():
-    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO, CLIENTE_BINANCE_GLOBAL
+    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
     time.sleep(15)  # BYPASS: Inicialización limpia de Gunicorn
     while True:
         try:
             leer_comando_supabase()
             if ESTADO_BOT != "OFF":
-                if not CLIENTE_BINANCE_GLOBAL:
-                    CLIENTE_BINANCE_GLOBAL = obtener_cliente_binance()
-                client_local = CLIENTE_BINANCE_GLOBAL
+                if not hasattr(ciclo_monitoreo_automatico, "cliente"):
+                    ciclo_monitoreo_automatico.cliente = obtener_cliente_binance()
+                client_local = ciclo_monitoreo_automatico.cliente
                 print("LOG_WATSON_DEBUG: Utilizando Instancia Unica de Binance -> " + str(client_local))
                 if client_local:
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
