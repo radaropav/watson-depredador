@@ -186,7 +186,7 @@ def leer_comando_supabase():
             print("LOG_WATSON_SUPABASE: Fallo critico de red -> " + str(e))
 
 def ciclo_monitoreo_automatico():
-    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
+    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO, CLIENTE_BINANCE_GLOBAL
     time.sleep(15)  # BYPASS: Inicialización limpia de Gunicorn
     while True:
         try:
