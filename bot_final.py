@@ -185,7 +185,7 @@ def leer_comando_supabase():
             print("LOG_WATSON_SUPABASE: Fallo critico de red -> " + str(e))
 
 def ciclo_monitoreo_automatico():
-    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO
+    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO, ESTADO_BOT
     time.sleep(15)  # BYPASS: Inicialización limpia de Gunicorn
     while True:
         try:
@@ -199,48 +199,59 @@ def ciclo_monitoreo_automatico():
                     ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
                     precio_actual = float(ticker['price'])
                     ULTIMO_PRECIO_MONITOREO = precio_actual
+                    
+                    atr_actual = calcular_atr_dinamico_flash(client_local)
+                    if atr_actual is not None:
+                        if atr_actual >= 1.5:
+                            ESTADO_BOT = "PREDADOR"
+                        else:
+                            ESTADO_BOT = "APLANAMIENTO"
+                    
                     print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)), flush=True)                                        
                     
-                    HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
-                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
-                        HISTORIAL_PRECIOS_MAESTRO.pop(0)
-
                     if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
                         maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
                         minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
                         
-                        if ESTADO_BOT == "PREDADOR" and precio_actual >= maximo_canal:
+                        if ESTADO_BOT == "PREDADOR" and precio_actual > maximo_canal:
                             if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
                                 ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
                         
-                        if ESTADO_BOT == "PREDADOR" and precio_actual <= minimo_canal:
+                        elif ESTADO_BOT == "PREDADOR" and precio_actual < minimo_canal:
                             if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
                                 ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
                                 
-                        if ESTADO_BOT == "APLANAMIENTO":
-                            atr = calcular_atr_dinamico_flash(client_local)
-                            if atr and atr < 1.5:
-                                if precio_actual >= maximo_canal: ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
-                                if precio_actual <= minimo_canal: ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
+                        elif ESTADO_BOT == "APLANAMIENTO":
+                            if precio_actual > maximo_canal:
+                                ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
+                            elif precio_actual < minimo_canal:
+                                ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
                     
-                    # Espera normal cuando todo sale BIEN
                     time.sleep(5)
+                    
+                    HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
+                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
+                        HISTORIAL_PRECIOS_MAESTRO.pop(0)
                 else:
                     time.sleep(15)               
         except Exception as e:
             print("LOG_WATSON_CRITICO: Fallo en ciclo de monitoreo -> " + str(e))
-            # FRENO DE MANO OBLIGATORIO: Si hay baneo o error, duerme el bot por 60 segundos antes de reintentar
             time.sleep(60)
 
-# DISPARO DIRECTO DEL HILO DE ENTRADA EN SEGUNDO PLANO
 hilo_global = threading.Thread(target=ciclo_monitoreo_automatico)
 hilo_global.daemon = True
 hilo_global.start()
 HILO_INICIADO = False
 CANDADO_SISTEMA = threading.Lock()
-# ------------------------------------------------------------------
-# BYPASS TOTAL INMUNE: LA RAÍZ ENTREGA SOLO JSON (VIVO AL 100%)
-# ------------------------------------------------------------------
+
+@app.route('/', methods=['GET', 'HEAD'])
+def responder_inspeccion_render_raiz():
+    diccionario_raiz = dict([
+        ("sistema", "WATSON_LIVE"),
+        ("status", "READY")
+    ])
+    return jsonify(diccionario_raiz), 200
+
 @app.route('/health', methods=['GET', 'HEAD'])
 def responder_ping_salud_exacto():
     diccionario_salud = dict([
@@ -248,15 +259,12 @@ def responder_ping_salud_exacto():
         ("code", 200)
     ])
     return jsonify(diccionario_salud), 200     
+
 def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
     url = os.getenv("URL_SUPABASE_TABLA")
     if not url: return
-    
-    # Truco de limpieza: Reemplazar el endpoint de lectura por el de la tabla de trades
     url_trades = url.replace("control_bot", "historial_trades")
-    # Limpiamos los filtros de lectura para dejar la URL limpia de escritura
     url_trades = url_trades.split("?")[0]
-    
     token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
     headers = dict([
         ("apikey", str(os.getenv("SUPABASE_KEY"))),
@@ -264,13 +272,10 @@ def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
         ("Content-Type", "application/json"),
         ("Prefer", "return=minimal")
     ])
-    
-    # Payload seguro sin una sola llave nativa
     payload = dict(
         direccion=str(direccion_orden),
         precio=float(precio_ejecutado)
     )
-    
     try:
         requests.post(url_trades, json=payload, headers=headers, timeout=8, verify=False)
     except Exception:
@@ -279,18 +284,15 @@ def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
 def registrar_mechazo_evitado_supabase(precio_origen):
     url = os.getenv("URL_SUPABASE_TABLA")
     if not url: return
-    
     url_mechazos = url.replace("control_bot", "registro_mechazos")
     url_mechazos = url_mechazos.split("?")[0]
-    
     token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
     headers = dict([
         ("apikey", str(os.getenv("SUPABASE_KEY"))),
         ("Authorization", token),
         ("Content-Type", "application/json"),
-        ("Prefer", "return=minimal")
+        ("Prefer-Type", "return=minimal")
     ])
-    
     payload = dict(
         perdida_evitada=float(5.50)
     )
@@ -298,6 +300,7 @@ def registrar_mechazo_evitado_supabase(precio_origen):
         requests.post(url_mechazos, json=payload, headers=headers, timeout=8, verify=False)
     except Exception:
         pass
+
 
 
 
