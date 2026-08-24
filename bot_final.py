@@ -241,7 +241,8 @@ def ciclo_monitoreo_automatico():
                 if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
                     HISTORIAL_PRECIOS_MAESTRO.pop(0)
             else:
-                time.sleep(15)               
+                print("LOG_WATSON_ALERT: Cliente es None. Esperando para evitar baneo...", flush=True)
+                time.sleep(60)               
         except Exception as e:
             print("LOG_WATSON_CRITICO: Fallo en ciclo de monitoreo -> " + str(e))
             time.sleep(60)
