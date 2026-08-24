@@ -186,10 +186,10 @@ def leer_comando_supabase():
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO, ESTADO_BOT
-    time.sleep(15)  # BYPASS: Inicialización limpia de Gunicorn
+        time.sleep(15)
+    contador_atr = 60
     while True:
         try:
-            # 1. Prioridad absoluta al Dashboard de Supabase
             leer_comando_supabase()
             
             if ESTADO_BOT == "OFF":
@@ -207,13 +207,16 @@ def ciclo_monitoreo_automatico():
                 precio_actual = float(ticker['price'])
                 ULTIMO_PRECIO_MONITOREO = precio_actual
                 
-                # 2. El ATR solo trabaja si el bot está encendido (Previene Error 1003)
-                atr_actual = calcular_atr_dinamico_flash(client_local)
-                if atr_actual is not None:
-                    if atr_actual >= 1.5:
-                        ESTADO_BOT = "PREDADOR"
-                    else:
-                        ESTADO_BOT = "APLANAMIENTO"
+                if contador_atr >= 60:
+                    atr_actual = calcular_atr_dinamico_flash(client_local)
+                    if atr_actual is not None:
+                        if atr_actual >= 1.5:
+                            ESTADO_BOT = "PREDADOR"
+                        else:
+                            ESTADO_BOT = "APLANAMIENTO"
+                    contador_atr = 0
+                else:
+                    contador_atr = contador_atr + 1
                 
                 print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)), flush=True)                                        
                 
