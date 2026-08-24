@@ -186,7 +186,7 @@ def leer_comando_supabase():
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO, ESTADO_BOT
-        time.sleep(15)
+    time.sleep(15)
     contador_atr = 60
     while True:
         try:
