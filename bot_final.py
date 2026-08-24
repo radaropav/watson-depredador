@@ -138,7 +138,7 @@ def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_sen
         client_local.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
         account = client_local.futures_account()
         balance_disponible = float(account.get('availableBalance', 0))
-        capital_operativo = balance_disponible * 0.25 if balance_disponible > 400.0 else balance_disponible * 0.10
+        capital_operativo = balance_disponible * 0.35 if balance_disponible > 400.0 else balance_disponible * 0.20
         quantity = round((capital_operativo * leverage) / precio_mercado, 3)
         nocional_estimado = quantity * precio_mercado
         if nocional_estimado < 21.0:
@@ -189,51 +189,59 @@ def ciclo_monitoreo_automatico():
     time.sleep(15)  # BYPASS: Inicialización limpia de Gunicorn
     while True:
         try:
+            # 1. Prioridad absoluta al Dashboard de Supabase
             leer_comando_supabase()
-            if ESTADO_BOT != "OFF":
-                if not hasattr(ciclo_monitoreo_automatico, "cliente"):
-                    ciclo_monitoreo_automatico.cliente = obtener_cliente_binance()
-                client_local = ciclo_monitoreo_automatico.cliente
-                print("LOG_WATSON_DEBUG: Utilizando Instancia Unica de Binance -> " + str(client_local))
-                if client_local:
-                    ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-                    precio_actual = float(ticker['price'])
-                    ULTIMO_PRECIO_MONITOREO = precio_actual
+            
+            if ESTADO_BOT == "OFF":
+                print("LOG_WATSON_PULSO: Modo: OFF | Sistema en pausa total de operaciones", flush=True)
+                time.sleep(10)
+                continue
+                
+            if not hasattr(ciclo_monitoreo_automatico, "cliente"):
+                ciclo_monitoreo_automatico.cliente = obtener_cliente_binance()
+            client_local = ciclo_monitoreo_automatico.cliente
+            print("LOG_WATSON_DEBUG: Utilizando Instancia Unica de Binance -> " + str(client_local))
+            
+            if client_local:
+                ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
+                precio_actual = float(ticker['price'])
+                ULTIMO_PRECIO_MONITOREO = precio_actual
+                
+                # 2. El ATR solo trabaja si el bot está encendido (Previene Error 1003)
+                atr_actual = calcular_atr_dinamico_flash(client_local)
+                if atr_actual is not None:
+                    if atr_actual >= 1.5:
+                        ESTADO_BOT = "PREDADOR"
+                    else:
+                        ESTADO_BOT = "APLANAMIENTO"
+                
+                print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)), flush=True)                                        
+                
+                if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
+                    maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
+                    minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
                     
-                    atr_actual = calcular_atr_dinamico_flash(client_local)
-                    if atr_actual is not None:
-                        if atr_actual >= 1.5:
-                            ESTADO_BOT = "PREDADOR"
-                        else:
-                            ESTADO_BOT = "APLANAMIENTO"
+                    if ESTADO_BOT == "PREDADOR" and precio_actual > maximo_canal:
+                        if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
+                            ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
                     
-                    print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)), flush=True)                                        
-                    
-                    if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
-                        maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
-                        minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
-                        
-                        if ESTADO_BOT == "PREDADOR" and precio_actual > maximo_canal:
-                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                                ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
-                        
-                        elif ESTADO_BOT == "PREDADOR" and precio_actual < minimo_canal:
-                            if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                                ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
-                                
-                        elif ESTADO_BOT == "APLANAMIENTO":
-                            if precio_actual > maximo_canal:
-                                ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
-                            elif precio_actual < minimo_canal:
-                                ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
-                    
-                    time.sleep(5)
-                    
-                    HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
-                    if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
-                        HISTORIAL_PRECIOS_MAESTRO.pop(0)
-                else:
-                    time.sleep(15)               
+                    elif ESTADO_BOT == "PREDADOR" and precio_actual < minimo_canal:
+                        if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
+                            ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
+                            
+                    elif ESTADO_BOT == "APLANAMIENTO":
+                        if precio_actual > maximo_canal:
+                            ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
+                        elif precio_actual < minimo_canal:
+                            ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
+                
+                time.sleep(5)
+                
+                HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
+                if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
+                    HISTORIAL_PRECIOS_MAESTRO.pop(0)
+            else:
+                time.sleep(15)               
         except Exception as e:
             print("LOG_WATSON_CRITICO: Fallo en ciclo de monitoreo -> " + str(e))
             time.sleep(60)
@@ -301,7 +309,3 @@ def registrar_mechazo_evitado_supabase(precio_origen):
     except Exception:
         pass
 
-
-
-
-# ------------------------------------------------------------------
