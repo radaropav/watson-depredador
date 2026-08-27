@@ -32,7 +32,9 @@ URL_TELEGRAM = os.getenv("URL_TELEGRAM")
 ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
 LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
 ULTIMO_PRECIO_MONITOREO = 0.0 
-ULTIMO_ATR_MONITOREO = 0.0    
+ULTIMO_ATR_MONITOREO = 0.0
+ULTIMO_ATR_MEMORIA_RAM = 1.8
+ULTIMA_MARCA_TIEMPO_ATR = 0.0
 CONTADOR_MECHAZOS = 0         
 
 # Almacenamiento local para el algoritmo de ruptura autónoma de 3 velas
@@ -73,7 +75,11 @@ def enviar_telegram(mensaje):
     except Exception: return False
 
 def calcular_atr_dinamico_flash(client_local, periodos=14):
-    if not client_local: return None
+    global ULTIMO_ATR_MEMORIA_RAM, ULTIMA_MARCA_TIEMPO_ATR
+    if not client_local: return ULTIMO_ATR_MEMORIA_RAM
+    tiempo_actual = time.time()
+    if (tiempo_actual - ULTIMA_MARCA_TIEMPO_ATR) < 300.0:
+        return ULTIMO_ATR_MEMORIA_RAM
     try:
         klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
         true_ranges = []
@@ -83,10 +89,13 @@ def calcular_atr_dinamico_flash(client_local, periodos=14):
             prev_close = float(klines[i-1][4])
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
-        return sum(true_ranges) / len(true_ranges)
+        ULTIMO_ATR_MEMORIA_RAM = sum(true_ranges) / len(true_ranges)
+        ULTIMA_MARCA_TIEMPO_ATR = tiempo_actual
+        print("LOG_WATSON_FASE2: ATR Actualizado en memoria RAM -> " + str(ULTIMO_ATR_MEMORIA_RAM), flush=True)
+        return ULTIMO_ATR_MEMORIA_RAM
     except Exception as e:
-        print("LOG_WATSON: Fallo en ATR de Binance -> " + str(e))
-        return None
+        print("LOG_WATSON_ESCUDO: API Bloqueada. Activando respaldo de ATR en RAM -> " + str(ULTIMO_ATR_MEMORIA_RAM), flush=True)
+        return ULTIMO_ATR_MEMORIA_RAM
 
 def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
     time.sleep(3)
@@ -186,8 +195,7 @@ def leer_comando_supabase():
 
 def ciclo_monitoreo_automatico():
     global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO, ESTADO_BOT
-    time.sleep(15)
-    contador_atr = 60
+        time.sleep(15)
     while True:
         try:
             leer_comando_supabase()
@@ -207,16 +215,13 @@ def ciclo_monitoreo_automatico():
                 precio_actual = float(ticker['price'])
                 ULTIMO_PRECIO_MONITOREO = precio_actual
                 
-                if contador_atr >= 60:
-                    atr_actual = calcular_atr_dinamico_flash(client_local)
-                    if atr_actual is not None:
-                        if atr_actual >= 1.5:
-                            ESTADO_BOT = "PREDADOR"
-                        else:
-                            ESTADO_BOT = "APLANAMIENTO"
-                    contador_atr = 0
-                else:
-                    contador_atr = contador_atr + 1
+                # FASE 2: La función ahora decide de forma autónoma si llama a la API o lee la RAM
+                atr_actual = calcular_atr_dinamico_flash(client_local)
+                if atr_actual is not None:
+                    if atr_actual >= 1.5:
+                        ESTADO_BOT = "PREDADOR"
+                    else:
+                        ESTADO_BOT = "APLANAMIENTO"
                 
                 print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)), flush=True)                                        
                 
@@ -245,7 +250,7 @@ def ciclo_monitoreo_automatico():
                     HISTORIAL_PRECIOS_MAESTRO.pop(0)
             else:
                 print("LOG_WATSON_ALERT: Cliente es None. Esperando para evitar baneo...", flush=True)
-                time.sleep(60)               
+                time.sleep(60) 
         except Exception as e:
             print("LOG_WATSON_CRITICO: Fallo en ciclo de monitoreo -> " + str(e))
             time.sleep(60)
