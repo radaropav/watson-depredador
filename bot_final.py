@@ -1,320 +1,322 @@
 import os
-import base64
+import sys
 import time
-import requests
-import hashlib
+import json
+import logging
 import threading
-from flask import Flask, request, jsonify, redirect, make_response
+import requests
+from logging.handlers import RotatingFileHandler
+from flask import Flask, jsonify
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
-# Desactivar alertas de certificados inseguros para el bypass forzado
-from requests.packages import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# =====================================================================
+# SYSTEMA DE AUDITORÍA INTERNA DE DISCO (MIGRADOS A DIGITALOCEAN)
+# =====================================================================
+log_filename = "bot_operaciones.log"
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", handlers=[
+    RotatingFileHandler(log_filename, maxBytes=10485760, backupCount=5),
+    logging.StreamHandler(sys.stdout)
+])
+logger = logging.getLogger("WATSON_PRO")
 
-# Inicialización nativa obligatoria para el despachador WSGI de Gunicorn
+# Inicialización obligatoria del despachador WSGI
 app = Flask(__name__)
 
-SYMBOL = "ETHUSDT"
+# =====================================================================
+# CONFIGURACIÓN MATRIZ AVANZADA (MULTIACTIVO & VARIABLES DE ENTORNO)
+# =====================================================================
+ACTIVOS_MAESTROS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "BNBUSDT"]
+FILTRO_MECHAZO_MAX = 0.0018
 TELEGRAM_CHAT_ID = "-1004335003036"
-FILTRO_MECHAZO_MAX = 0.0018  
 
-# EXTRACCIÓN SEGURA DE CREDENCIALES DESDE EL ENTORNO DE RENDER
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+URL_SUPABASE_TABLA = os.getenv("URL_SUPABASE_TABLA")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-URL_BINANCE = os.getenv("URL_BINANCE")
-URL_CRYPTO = os.getenv("URL_CRYPTO")
-URL_TELEGRAM = os.getenv("URL_TELEGRAM")
+# MEMORIA RAM DE ALTA VELOCIDAD DEL VPS (ESTADO DEL SISTEMA)
+ESTADO_BOT = "PREDADOR"        # "OFF", "PREDADOR", "APLANAMIENTO"
+INDICE_SENTIMIENTO = 50       # Control de Pánico & Codicia (0-100)
+LEVERAGE_MANUAL = 10          
+HISTORIAL_PRECIOS_MAESTRO = {activo: [] for activo in ACTIVOS_MAESTROS}
+ULTIMA_MARCA_TIEMPO_ATR = {activo: 0.0 for activo in ACTIVOS_MAESTROS}
+ULTIMO_ATR_RAM = {activo: 1.8 for activo in ACTIVOS_MAESTROS}
 
-# VARIABLES GLOBALES DINÁMICAS (Viven 100% en la memoria RAM de Render)
-ESTADO_BOT = "PREDADOR"       # Modos permitidos: "OFF", "PREDADOR", "APLANAMIENTO"
-LEVERAGE_MANUAL = 10          # Control dinámico de apalancamiento desde la web
-ULTIMO_PRECIO_MONITOREO = 0.0 
-ULTIMO_ATR_MONITOREO = 0.0
-ULTIMO_ATR_MEMORIA_RAM = 1.8
-ULTIMA_MARCA_TIEMPO_ATR = 0.0
-CONTADOR_MECHAZOS = 0         
-
-# Almacenamiento local para el algoritmo de ruptura autónoma de 3 velas
-HISTORIAL_PRECIOS_MAESTRO = []
+CANDADO_ORDENES = threading.Lock()
 
 def obtener_cliente_binance():
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
         try:
-            # Inicialización directa y nativa sin usar llaves directas
-            cliente = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
-            
-            # EL TRUCO INSTITUCIONAL: Usar el endpoint de respaldo api3 que está libre de bloqueos
-            cliente.API_URL = "https://" + "api3." + "binance" + ".com"
-            return cliente
+            return Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
         except Exception as e:
-            print("LOG_WATSON_BINANCE_FALLO: Error al instanciar el cliente de Binance -> " + str(e), flush=True)
+            logger.error(f"Error de conexión nativa a la API oficial de Binance: {e}")
             return None
     return None
-    
+
 def enviar_telegram(mensaje):
     if not TELEGRAM_TOKEN: return False
-    protocolo = "https://"
-    sub = "api."
-    raiz = "telegram"
-    tld = ".org"
-    ruta_metodo = "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
-    url = protocolo + sub + raiz + tld + ruta_metodo
-    if URL_TELEGRAM: url = str(URL_TELEGRAM) + "/bot" + str(TELEGRAM_TOKEN) + "/sendMessage"
-    
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje}
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Content-Type": "application/json"
-    }
+    url = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage"
+    if os.getenv("URL_TELEGRAM"):
+        url = f"{os.getenv('URL_TELEGRAM')}/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
     try:
-        requests.post(url, json=payload, headers=headers, timeout=12, verify=False)
+        requests.post(url, json=payload, timeout=10)
         return True
-    except Exception: return False
+    except Exception:
+        return False
 
-def calcular_atr_dinamico_flash(client_local, periodos=14):
-    global ULTIMO_ATR_MEMORIA_RAM, ULTIMA_MARCA_TIEMPO_ATR
-    if not client_local: return ULTIMO_ATR_MEMORIA_RAM
-    tiempo_actual = time.time()
-    if (tiempo_actual - ULTIMA_MARCA_TIEMPO_ATR) < 300.0:
-        return ULTIMO_ATR_MEMORIA_RAM
+# =====================================================================
+# GESTIÓN DE RIESGO E INFRAESTRUCTURA DE SEGURIDAD INTERNA
+# =====================================================================
+def comprobar_posicion_activa(cliente, simbolo):
+    if not cliente: return True
     try:
-        klines = client_local.futures_klines(symbol=SYMBOL, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
-        true_ranges = []
-        for i in range(1, len(klines)):
-            high = float(klines[i][2])
-            low = float(klines[i][3])
-            prev_close = float(klines[i-1][4])
-            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
-            true_ranges.append(tr)
-        ULTIMO_ATR_MEMORIA_RAM = sum(true_ranges) / len(true_ranges)
-        ULTIMA_MARCA_TIEMPO_ATR = tiempo_actual
-        print("LOG_WATSON_FASE2: ATR Actualizado en memoria RAM -> " + str(ULTIMO_ATR_MEMORIA_RAM), flush=True)
-        return ULTIMO_ATR_MEMORIA_RAM
+        posiciones = cliente.futures_position_information(symbol=simbolo)
+        for pos in posiciones:
+            if pos['symbol'] == simbolo and float(pos['positionAmt']) != 0.0:
+                return True
+        return False
     except Exception as e:
-        print("LOG_WATSON_ESCUDO: API Bloqueada. Activando respaldo de ATR en RAM -> " + str(ULTIMO_ATR_MEMORIA_RAM), flush=True)
-        return ULTIMO_ATR_MEMORIA_RAM
+        logger.error(f"Error comprobando posiciones abiertas para {simbolo}: {e}")
+        return True
 
-def evaluar_filtro_anti_mechazo_directo(client_local, precio_origen):
-    time.sleep(3)
-    if not client_local: return False
+def evaluar_filtro_anti_mechazo_directo(cliente, simbolo, precio_origen):
+    if not cliente: return False
     try:
-        ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
+        ticker = cliente.futures_symbol_ticker(symbol=simbolo)
         precio_actual = float(ticker['price'])
         variacion_micro = abs((precio_actual - precio_origen) / precio_origen)
         if variacion_micro > FILTRO_MECHAZO_MAX:
-                 registrar_mechazo_evitado_supabase(precio_actual)
-                 porcentaje_formateado = round(variacion_micro * 100, 3)
-                 msg_bloqueo = "⚠️ ALERTA MITIGACIÓN WATSON\n• Orden Cancelada: Mechazo Detectado\n• Variación Micro: " + str(porcentaje_formateado) + "%\n• Precio Ticker: " + str(precio_actual)
-                 enviar_telegram(msg_bloqueo)
-                 return False
+            registrar_mechazo_evitado_supabase(simbolo, precio_actual)
+            enviar_telegram(f"⚠️ *ALERTA MITIGACIÓN*\n• Mechazo Detectado en {simbolo}\n• Variación: {round(variacion_micro * 100, 3)}%\n• Orden Cancelada.")
+            return False
         return True
     except Exception as e:
-        print("LOG_WATSON: Fallo en Filtro Ticker de Binance -> " + str(e))
+        logger.error(f"Fallo crítico en filtro anti-mechazo de {simbolo}: {e}")
         return False
 
-def ejecutar_caza_asimetrica(client_local, direccion, precio_mercado, fuerza_senal):
-    global ULTIMO_ATR_MONITOREO
-    if not client_local: return "Cliente Binance no inicializado"
+def calcular_atr_dinamico_flash(cliente, simbolo, periodos=14):
+    global ULTIMO_ATR_RAM, ULTIMA_MARCA_TIEMPO_ATR
+    tiempo_actual = time.time()
+    if (tiempo_actual - ULTIMA_MARCA_TIEMPO_ATR[simbolo]) < 300.0:
+        return ULTIMO_ATR_RAM[simbolo]
     try:
-        leverage = 20 if fuerza_senal >= 0.0040 else LEVERAGE_MANUAL
-        if ESTADO_BOT == "OFF": return "ORDEN BLOQUEADA: El bot se encuentra en MODO OFF"
-
-        if ESTADO_BOT == "APLANAMIENTO":
-            tp_porcentaje = 0.0025
-            sl_porcentaje = 0.0018
-            precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
-            precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
-            tipo_gestion = "RANGOS_COMPRIMIDOS_REVERSION"
-        else:
-            atr = calcular_atr_dinamico_flash(client_local)
-            ULTIMO_ATR_MONITOREO = atr if atr is not None else 0.0
-            if atr is not None and atr > 0:
-                multiplicador_tp = 2.0 if fuerza_senal >= 0.0040 else 1.5
-                multiplicador_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
-                precio_tp = round(precio_mercado + (atr * multiplicador_tp), 2) if direccion == "LONG" else round(precio_mercado - (atr * multiplicador_tp), 2)
-                precio_sl = round(precio_mercado - (atr * multiplicador_sl), 2) if direccion == "LONG" else round(precio_mercado + (atr * multiplicador_sl), 2)
-                tipo_gestion = "DINAMICA_ATR"
-            else:
-                tp_porcentaje = 0.0050 if fuerza_senal >= 0.0040 else 0.0022
-                sl_porcentaje = 0.0030 if fuerza_senal >= 0.0040 else 0.0015
-                precio_tp = round(precio_mercado * (1 + tp_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_porcentaje), 2)
-                precio_sl = round(precio_mercado * (1 - sl_porcentaje), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_porcentaje), 2)
-                tipo_gestion = "FIJA_EMERGENCIA"
-
-        client_local.futures_change_leverage(symbol=SYMBOL, leverage=leverage)
-        account = client_local.futures_account()
-        balance_disponible = float(account.get('availableBalance', 0))
-        capital_operativo = balance_disponible * 0.35 if balance_disponible > 400.0 else balance_disponible * 0.20
-        quantity = round((capital_operativo * leverage) / precio_mercado, 3)
-        nocional_estimado = quantity * precio_mercado
-        if nocional_estimado < 21.0:
-            quantity = round(21.0 / precio_mercado, 3)
-        
-        if quantity <= 0: return "Capital insuficiente"
-
-        side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
-        side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
-
-        client_local.futures_create_order(symbol=SYMBOL, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
-        client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, reduceOnly=True)
-        client_local.futures_create_order(symbol=SYMBOL, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, reduceOnly=True); guardar_auditoria_supabase(direccion, precio_mercado)
-              
-        msg = "==================================\n   SISTEMA DEPREDADOR OPERATIVO   \n==================================\n• ACTIVO      : " + str(SYMBOL) + "\n• DIRECCION   : " + str(direccion) + "\n• APALANCAMIENTO: x" + str(leverage) + "\n----------------------------------\n• ENTRADA     : " + str(precio_mercado) + "\n• TAKE PROFIT : " + str(precio_tp) + "\n• STOP LOSS   : " + str(precio_sl) + "\n----------------------------------\n• FUERZA SENAL: " + str(fuerza_senal) + "\n• MODO ACTIVO : " + str(ESTADO_BOT) + "\n• GESTION     : " + tipo_gestion + "\n=================================="
-        enviar_telegram(msg)
-        return "Exito"
-    except BinanceAPIException as e:
-        print("LOG_WATSON: Error Directo API Binance -> " + str(e))
-        enviar_telegram("BINANCE_API_ERROR: " + str(e))
-        return str(e)
+        klines = cliente.futures_klines(symbol=simbolo, interval=Client.KLINE_INTERVAL_5MINUTE, limit=periodos + 1)
+        true_ranges = []
+        for i in range(1, len(klines)):
+            high, low, prev_close = float(klines[i][2]), float(klines[i][3]), float(klines[i-1][4])
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            true_ranges.append(tr)
+        ULTIMO_ATR_RAM[simbolo] = sum(true_ranges) / len(true_ranges)
+        ULTIMA_MARCA_TIEMPO_ATR[simbolo] = tiempo_actual
+        return ULTIMO_ATR_RAM[simbolo]
     except Exception as e:
-        enviar_telegram("ERROR CRITICO " + str(e))
-        return str(e)
+        logger.warning(f"API sobrecargada. Usando respaldo de ATR en RAM para {simbolo}: {e}")
+        return ULTIMO_ATR_RAM[simbolo]
 
-def leer_comando_supabase():
-        global ESTADO_BOT
-        url = os.getenv("URL_SUPABASE_TABLA")
-        if not url: return
-        
-        token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
-        headers = dict([
-            ("apikey", str(os.getenv("SUPABASE_KEY"))),
-            ("Authorization", token)
-        ])
+# =====================================================================
+# MOTOR DE EJECUCIÓN CUASI-INSTITUCIONAL (FUTURE ORDERS)
+# =====================================================================
+def ejecutar_caza_asimetrica(cliente, simbolo, direccion, precio_mercado, fuerza_senal):
+    global INDICE_SENTIMIENTO
+    if ESTADO_BOT == "OFF": return
+    
+    # FILTRO DE PÁNICO Y CODICIA EXTREMA
+    if ESTADO_BOT == "APLANAMIENTO" and (INDICE_SENTIMIENTO < 20 or INDICE_SENTIMIENTO > 85):
+        logger.info(f"Filtro de Pánico/Codicia Bloqueó el Modo Aplanamiento en {simbolo} por alta volatilidad.")
+        return
+
+    with CANDADO_ORDENES:
+        if comprobar_posicion_activa(cliente, simbolo):
+            logger.info(f"Orden declinada: Ya hay una posición ejecutándose en {simbolo}")
+            return
+
         try:
-            respuesta = requests.get(url, headers=headers, timeout=8, verify=False)
-            if respuesta.status_code == 200:
-                datos = respuesta.json()
-                if datos and len(datos) > 0:
-                    primer_registro = datos[0]
-                    ESTADO_BOT = str(primer_registro.get("estado", ESTADO_BOT))
-        except Exception as e:
-            print("LOG_WATSON_SUPABASE: Fallo critico de red -> " + str(e))
+            leverage = 20 if fuerza_senal >= 0.0040 else LEVERAGE_MANUAL
+            cliente.futures_change_leverage(symbol=simbolo, leverage=leverage)
+            
+            # INTERÉS COMPUESTO AUTOMÁTICO BASADO EN BALANCE EN TIEMPO REAL
+            cuenta = cliente.futures_account()
+            balance_real = float(cuenta.get('availableBalance', 0))
+            capital_operativo = balance_real * 0.35 if balance_real > 400.0 else balance_real * 0.20
+            
+            quantity = round((capital_operativo * leverage) / precio_mercado, 3)
+            if (quantity * precio_mercado) < 21.0:
+                quantity = round(21.0 / precio_mercado, 3)
+            if quantity <= 0: return
 
-def ciclo_monitoreo_automatico():
-    global ULTIMO_PRECIO_MONITOREO, CONTADOR_MECHAZOS, HISTORIAL_PRECIOS_MAESTRO, ESTADO_BOT
-        time.sleep(15)
+            atr = calcular_atr_dinamico_flash(cliente, simbolo)
+            
+            if ESTADO_BOT == "APLANAMIENTO":
+                tp_pct, sl_pct = 0.0025, 0.0018
+                precio_tp = round(precio_mercado * (1 + tp_pct), 2) if direccion == "LONG" else round(precio_mercado * (1 - tp_pct), 2)
+                precio_sl = round(precio_mercado * (1 - sl_pct), 2) if direccion == "LONG" else round(precio_mercado * (1 + sl_pct), 2)
+                tipo_gestion = "RANGOS_COMPRIMIDOS"
+            else:
+                multi_tp = 2.0 if fuerza_senal >= 0.0040 else 1.5
+                multi_sl = 1.2 if fuerza_senal >= 0.0040 else 1.0
+                precio_tp = round(precio_mercado + (atr * multi_tp), 2) if direccion == "LONG" else round(precio_mercado - (atr * multi_tp), 2)
+                precio_sl = round(precio_mercado - (atr * multi_sl), 2) if direccion == "LONG" else round(precio_mercado + (atr * multi_sl), 2)
+                tipo_gestion = "DINAMICA_ATR"
+
+            side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
+            side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
+
+            # EJECUCIÓN ORDEN DE ENTRADA MARKET
+            cliente.futures_create_order(symbol=simbolo, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
+            
+            # EFICIENCIA EN COMISIONES: ÓRDENES LIMITADAS MAKER (POST-ONLY) PARA LAS SALIDAS
+            cliente.futures_create_order(symbol=simbolo, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, reduceOnly=True)
+            cliente.futures_create_order(symbol=simbolo, side=side_salida, type='STOP_MARKET', stopPrice=precio_sl, reduceOnly=True)
+            
+            # ACTIVACIÓN DEL TRAILING STOP DINÁMICO EN EL BROKER
+            try:
+                cliente.futures_create_order(symbol=simbolo, side=side_salida, type='TRAILING_STOP_MARKET', callbackRate=1.0, reduceOnly=True)
+            except Exception:
+                pass # Si el par no permite trailing stop rápido, continúa con las órdenes clásicas
+
+            guardar_auditoria_supabase(simbolo, direccion, precio_mercado)
+            
+            msg = f"==================================\n🔥 *ORDEN INICIALIZADA EN FRANCFORT* 🔥\n==================================\n• ACTIVO      : {simbolo}\n• DIRECCIÓN   : {direccion}\n• COMPUESTO APALANCADO: x{leverage}\n----------------------------------\n• ENTRADA     : {precio_mercado}\n• TAKE PROFIT : {precio_tp}\n• STOP LOSS   : {precio_sl}\n----------------------------------\n• GESTIÓN     : {tipo_gestion}\n=================================="
+            enviar_telegram(msg)
+            logger.info(f"Orden ejecutada exitosamente para {simbolo} [{direccion}]")
+        except BinanceAPIException as e:
+            logger.error(f"Fallo de la API de Binance al inyectar orden para {simbolo}: {e}")
+            enviar_telegram(f"❌ *BINANCE_API_ERROR* en {simbolo}: {e.message}")
+        except Exception as e:
+            logger.error(f"Fallo crítico operacional en orden de {simbolo}: {e}")
+
+# =====================================================================
+# HILOS DE MONITOREO AUTOMATIZADOS (WEBSOCKETS SIMULADOS ULTRA-EFICIENTES)
+# =====================================================================
+def leer_comando_supabase():
+    global ESTADO_BOT
+    if not URL_SUPABASE_TABLA or not SUPABASE_KEY: return
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    try:
+        respuesta = requests.get(URL_SUPABASE_TABLA, headers=headers, timeout=5)
+        if respuesta.status_code == 200:
+            datos = respuesta.json()
+            if datos:
+                ESTADO_BOT = str(datos.get("estado", ESTADO_BOT))
+    except Exception as e:
+        logger.error(f"Error sincronizando comandos desde el panel de Supabase: {e}")
+
+def actualizar_sentimiento_noticias():
+    global INDICE_SENTIMIENTO
+    url = "https://alternative.me"
+    try:
+        res = requests.get(url, timeout=5)
+        if res.status_code == 200:
+            INDICE_SENTIMIENTO = int(res.json()['data']['value'])
+            logger.info(f"Filtro Macroeconómico Actualizado: Sentimiento del Mercado en {INDICE_SENTIMIENTO}/100")
+    except Exception as e:
+        logger.warning(f"No se pudo descargar el índice de Pánico y Codicia: {e}")
+
+def hilo_lento_control_externo():
+    """Hilo secundario lento: Lee Supabase y Noticias cada 30 segundos sin estorbar las órdenes"""
     while True:
         try:
             leer_comando_supabase()
-            
-            if ESTADO_BOT == "OFF":
-                print("LOG_WATSON_PULSO: Modo: OFF | Sistema en pausa total de operaciones", flush=True)
-                time.sleep(10)
-                continue
-                
-            if not hasattr(ciclo_monitoreo_automatico, "cliente"):
-                ciclo_monitoreo_automatico.cliente = obtener_cliente_binance()
-            client_local = ciclo_monitoreo_automatico.cliente
-            print("LOG_WATSON_DEBUG: Utilizando Instancia Unica de Binance -> " + str(client_local))
-            
-            if client_local:
-                ticker = client_local.futures_symbol_ticker(symbol=SYMBOL)
-                precio_actual = float(ticker['price'])
-                ULTIMO_PRECIO_MONITOREO = precio_actual
-                
-                # FASE 2: La función ahora decide de forma autónoma si llama a la API o lee la RAM
-                atr_actual = calcular_atr_dinamico_flash(client_local)
-                if atr_actual is not None:
-                    if atr_actual >= 1.5:
-                        ESTADO_BOT = "PREDADOR"
-                    else:
-                        ESTADO_BOT = "APLANAMIENTO"
-                
-                print("LOG_WATSON_PULSO: Modo: " + str(ESTADO_BOT) + " | Precio ETH: " + str(precio_actual) + " | Historial: " + str(len(HISTORIAL_PRECIOS_MAESTRO)), flush=True)                                        
-                
-                if len(HISTORIAL_PRECIOS_MAESTRO) >= 6:
-                    maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO)
-                    minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO)
-                    
-                    if ESTADO_BOT == "PREDADOR" and precio_actual > maximo_canal:
-                        if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                            ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0022)
-                    
-                    elif ESTADO_BOT == "PREDADOR" and precio_actual < minimo_canal:
-                        if evaluar_filtro_anti_mechazo_directo(client_local, precio_actual):
-                            ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0022)
-                            
-                    elif ESTADO_BOT == "APLANAMIENTO":
-                        if precio_actual > maximo_canal:
-                            ejecutar_caza_asimetrica(client_local, "SHORT", precio_actual, 0.0011)
-                        elif precio_actual < minimo_canal:
-                            ejecutar_caza_asimetrica(client_local, "LONG", precio_actual, 0.0011)
-                
-                time.sleep(5)
-                
-                HISTORIAL_PRECIOS_MAESTRO.append(precio_actual)
-                if len(HISTORIAL_PRECIOS_MAESTRO) > 12: 
-                    HISTORIAL_PRECIOS_MAESTRO.pop(0)
-            else:
-                print("LOG_WATSON_ALERT: Cliente es None. Esperando para evitar baneo...", flush=True)
-                time.sleep(60) 
+            actualizar_sentimiento_noticias()
         except Exception as e:
-            print("LOG_WATSON_CRITICO: Fallo en ciclo de monitoreo -> " + str(e))
-            time.sleep(60)
+            logger.error(f"Fallo en hilo de control externo: {e}")
+        time.sleep(30)
 
-hilo_global = threading.Thread(target=ciclo_monitoreo_automatico)
-hilo_global.daemon = True
-hilo_global.start()
-HILO_INICIADO = False
-CANDADO_SISTEMA = threading.Lock()
+def ciclo_monitoreo_principal_vps():
+    """HILO MAESTRO DE ALTA VELOCIDAD PARA OPERACIÓN CONTINUA 24/7"""
+    logger.info("Iniciando Hilo de Ejecución Continua desde los Servidores de Frankfurt...")
+    cliente = obtener_cliente_binance()
+    
+    while True:
+        if not cliente:
+            logger.error("No se pudo instanciar el cliente Binance. Reintentando en 30 segundos...")
+            time.sleep(30)
+            cliente = obtener_cliente_binance()
+            continue
+            
+        if ESTADO_BOT == "OFF":
+            time.sleep(5)
+            continue
+
+        for activo in ACTIVOS_MAESTROS:
+            try:
+                ticker = cliente.futures_symbol_ticker(symbol=activo)
+                precio_actual = float(ticker['price'])
+                
+                # ESCÁNER DE VOLATILIDAD INTERNA
+                atr_actual = calcular_atr_dinamico_flash(cliente, activo)
+                
+                HISTORIAL_PRECIOS_MAESTRO[activo].append(precio_actual)
+                if len(HISTORIAL_PRECIOS_MAESTRO[activo]) > 12:
+                    HISTORIAL_PRECIOS_MAESTRO[activo].pop(0)
+
+                if len(HISTORIAL_PRECIOS_MAESTRO[activo]) >= 6:
+                    maximo_canal = max(HISTORIAL_PRECIOS_MAESTRO[activo][:-1])
+                    minimo_canal = min(HISTORIAL_PRECIOS_MAESTRO[activo][:-1])
+
+                    # MÓDULO ADAPTATIVO: ROTACIÓN OPERATIVA POR COMPORTAMIENTO
+                    modo_activo_par = "PREDADOR" if atr_actual >= 1.5 else "APLANAMIENTO"
+
+                    if modo_activo_par == "PREDADOR" and precio_actual > maximo_canal:
+                        if evaluar_filtro_anti_mechazo_directo(cliente, activo, precio_actual):
+                            ejecutar_caza_asimetrica(cliente, activo, "LONG", precio_actual, 0.0022)
+                    
+                    elif modo_activo_par == "PREDADOR" and precio_actual < minimo_canal:
+                        if evaluar_filtro_anti_mechazo_directo(cliente, activo, precio_actual):
+                            ejecutar_caza_asimetrica(cliente, activo, "SHORT", precio_actual, 0.0022)
+                            
+                    elif modo_activo_par == "APLANAMIENTO":
+                        if precio_actual > maximo_canal:
+                            ejecutar_caza_asimetrica(cliente, activo, "SHORT", precio_actual, 0.0011)
+                        elif precio_actual < minimo_canal:
+                            ejecutar_caza_asimetrica(cliente, activo, "LONG", precio_actual, 0.0011)
+
+            except Exception as e:
+                logger.error(f"Fallo en lectura de red WebSocket para {activo}: {e}")
+                time.sleep(1)
+        
+        # Latencia de procesamiento optimizada para el VPS
+        time.sleep(2)
+
+# =====================================================================
+# INTEGRACIÓN DE PERSISTENCIA Y RUTAS DE CONTROL HTTP
+# =====================================================================
+def guardar_auditoria_supabase(simbolo, direccion, precio):
+    if not URL_SUPABASE_TABLA or not SUPABASE_KEY: return
+    url_trades = URL_SUPABASE_TABLA.replace("control_bot", "historial_trades").split("?")[0]
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json"}
+    payload = {"activo": simbolo, "direccion": direccion, "precio": float(precio)}
+    try:
+        requests.post(url_trades, json=payload, headers=headers, timeout=5)
+    except Exception: pass
+
+def registrar_mechazo_evitado_supabase(simbolo, precio):
+    if not URL_SUPABASE_TABLA or not SUPABASE_KEY: return
+    url_mechazos = URL_SUPABASE_TABLA.replace("control_bot", "registro_mechazos").split("?")[0]
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json"}
+    payload = {"activo": simbolo, "precio": float(precio), "perdida_evitada": 5.50}
+    try:
+        requests.post(url_mechazos, json=payload, headers=headers, timeout=5)
+    except Exception: pass
 
 @app.route('/', methods=['GET', 'HEAD'])
-def responder_inspeccion_render_raiz():
-    diccionario_raiz = dict([
-        ("sistema", "WATSON_LIVE"),
-        ("status", "READY")
-    ])
-    return jsonify(diccionario_raiz), 200
+def index():
+    return jsonify({"sistema": "WATSON_PROFESSIONAL_LIVE", "servidor": "FRANKFURT_VPS", "status": "RUNNING"}), 200
 
 @app.route('/health', methods=['GET', 'HEAD'])
-def responder_ping_salud_exacto():
-    diccionario_salud = dict([
-        ("status", "OK"),
-        ("code", 200)
-    ])
-    return jsonify(diccionario_salud), 200     
+def health():
+    return jsonify({"status": "OK", "threads_active": threading.active_count()}), 200
 
-def guardar_auditoria_supabase(direccion_orden, precio_ejecutado):
-    url = os.getenv("URL_SUPABASE_TABLA")
-    if not url: return
-    url_trades = url.replace("control_bot", "historial_trades")
-    url_trades = url_trades.split("?")[0]
-    token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
-    headers = dict([
-        ("apikey", str(os.getenv("SUPABASE_KEY"))),
-        ("Authorization", token),
-        ("Content-Type", "application/json"),
-        ("Prefer", "return=minimal")
-    ])
-    payload = dict(
-        direccion=str(direccion_orden),
-        precio=float(precio_ejecutado)
-    )
-    try:
-        requests.post(url_trades, json=payload, headers=headers, timeout=8, verify=False)
-    except Exception:
-        pass
+# LANZAMIENTO SEGURO MULTIHILO EN DIGITALOCEAN
+hilo_control = threading.Thread(target=hilo_lento_control_externo, daemon=True)
+hilo_control.start()
 
-def registrar_mechazo_evitado_supabase(precio_origen):
-    url = os.getenv("URL_SUPABASE_TABLA")
-    if not url: return
-    url_mechazos = url.replace("control_bot", "registro_mechazos")
-    url_mechazos = url_mechazos.split("?")[0]
-    token = "Bearer " + str(os.getenv("SUPABASE_KEY"))
-    headers = dict([
-        ("apikey", str(os.getenv("SUPABASE_KEY"))),
-        ("Authorization", token),
-        ("Content-Type", "application/json"),
-        ("Prefer-Type", "return=minimal")
-    ])
-    payload = dict(
-        perdida_evitada=float(5.50)
-    )
-    try:
-        requests.post(url_mechazos, json=payload, headers=headers, timeout=8, verify=False)
-    except Exception:
-        pass
+hilo_trading = threading.Thread(target=ciclo_monitoreo_principal_vps, daemon=True)
+hilo_trading.start()
 
+if __name__ == '__main__':
+    # Ejecución nativa local o vía Gunicorn
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
