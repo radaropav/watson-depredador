@@ -163,9 +163,18 @@ def ejecutar_caza_asimetrica(cliente, simbolo, direccion, precio_mercado, fuerza
 
             side_entrada = Client.SIDE_BUY if direccion == "LONG" else Client.SIDE_SELL
             side_salida = Client.SIDE_SELL if direccion == "LONG" else Client.SIDE_BUY
+        try:
+            cliente.futures_change_margin_type(symbol=simbolo, marginType="ISOLATED")
+        except Exception:
+            pass
+
 
             # EJECUCIÓN ORDEN DE ENTRADA MARKET
-            cliente.futures_create_order(symbol=simbolo, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
+            precisiones = {"BTC": 3, "ETH": 3, "SOL": 2, "BNB": 2, "XRP": 0}
+    base_asset = simbolo.replace("USDT", "")
+    dec = precisiones.get(base_asset, 2)
+    quantity = round(float(quantity), dec) if dec > 0 else int(float(quantity))
+    cliente.futures_create_order(symbol=simbolo, side=side_entrada, type=Client.FUTURE_ORDER_TYPE_MARKET, quantity=quantity)
             
             # EFICIENCIA EN COMISIONES: ÓRDENES LIMITADAS MAKER (POST-ONLY) PARA LAS SALIDAS
             cliente.futures_create_order(symbol=simbolo, side=side_salida, type='TAKE_PROFIT_MARKET', stopPrice=precio_tp, reduceOnly=True)
@@ -206,11 +215,11 @@ def leer_comando_supabase():
 
 def actualizar_sentimiento_noticias():
     global INDICE_SENTIMIENTO
-    url = "https://alternative.me"
+    url = "https://alternative.me/fng/"
     try:
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
-            INDICE_SENTIMIENTO = int(res.json()['data']['value'])
+            INDICE_SENTIMIENTO = int(res.json()['data'][0]['value'])
             logger.info(f"Filtro Macroeconómico Actualizado: Sentimiento del Mercado en {INDICE_SENTIMIENTO}/100")
     except Exception as e:
         logger.warning(f"No se pudo descargar el índice de Pánico y Codicia: {e}")
@@ -279,7 +288,7 @@ def ciclo_monitoreo_principal_vps():
                 time.sleep(1)
         
         # Latencia de procesamiento optimizada para el VPS
-        time.sleep(2)
+        time.sleep(30)
 
 # =====================================================================
 # INTEGRACIÓN DE PERSISTENCIA Y RUTAS DE CONTROL HTTP
